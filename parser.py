@@ -7,6 +7,10 @@ import os
 from shutil import get_terminal_size
 from urwid.util import str_util
 
+import re
+
+yt_url_regex = r"(?:https?:\/\/)?(?:www.)?youtube.com(?:\.[a-z]+)?\/(?:watch\?v=|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)"
+
 def trunc(s, max_len: int | None = 20):
     if max_len is None: return s
     out_chars = ""
@@ -72,6 +76,11 @@ def run_command(lib: Library, command: str, params: list[str]):
             return out_str
 
     optional0=params[0] if len(params)>0 else None
+    
+    for x in range(len(params)):
+        matched = re.match(yt_url_regex,params[x])
+        if matched:
+            params[x]=matched.groups()[0]
 
     match command:
         case 'dv':      lib.download_video(params[0])
