@@ -3,52 +3,54 @@ from downloader import convert_file_size
 from datatypes import *
 import subprocess
 import os
+from dbconnection import *
 
 import re
 
 yt_url_regex = r"(?:https?:\/\/)?(?:www.)?youtube.com(?:\.[a-z]+)?\/(?:watch\?v=|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)"
 
-def convert_duration(dur): return f"{int(dur/3600)}:{int(dur/60)%60:02d}:{dur%60:02d}"
-def gen_temp_file_name(): return f"_tmp_{os.times().elapsed}.m3u"
+def convert_duration(dur: int) -> str: return f"{int(dur/3600)}:{int(dur/60)%60:02d}:{dur%60:02d}"
+def gen_temp_file_name() -> str: return f"_tmp_{os.times().elapsed}.m3u"
 
-def print_channel(channel_id: str, channel_title: str):
+def print_channel(channel_id: str, channel_title: str) -> str:
     return channel_id if channel_title == channel_id[1:] else f"{channel_id} ({channel_title})"
 
-def run_command(lib: Library, command: str, params: list[str]):
-    def media_name(vid: str | None):
+def run_command(lib: Library, command: str, params: list[str]) -> None:
+    def media_name(vid: str | None) -> str | None:
         return None if vid is None else VideoID(vid).filename(lib.media_dir)
 
-    def get_videos_list_str(vids: list):
+    def get_videos_list_str(vids: list[VideoMetadataWithChannelName]) -> list[str]:
         return [
             f"{video.id} | {convert_duration(video.duration)} | {print_channel(video.channel, video.channel_name)}: {video.title}"
             for video in vids
         ]
 
-    def get_playlist_videos_list_str(vids: list):
+    def get_playlist_videos_list_str(vids: list[VideoMetadataWithIndexAndChannelName]) -> list[str]:
         return [
             f"{str(video.playlist_position+1).ljust(len(str(len(vids)+1)),' ')}: {video.id} | {convert_duration(video.duration)} | {print_channel(video.channel, video.channel_name)}: {video.title}"
             for video in vids
         ]
 
-    def get_playlists_list_str(playlists: list):
+    def get_playlists_list_str(playlists: list[PlaylistMetadataVCountWithChannelName]) -> list[str]:
         return [
             f"{playlist.id} | {playlist.entries} video(s) | {print_channel(playlist.channel, playlist.channel_name)}: {playlist.title}"
             for playlist in playlists
         ]
 
-    def open_mpv(in_str: str | None):
+    def open_mpv(in_str: str | None) -> None:
         if in_str is None: return
         process = subprocess.Popen(['mpv', '--really-quiet', '--playlist=-'], stdin=subprocess.PIPE, text=True)
         if process is not None and process.stdin is not None:
             process.stdin.write(in_str)
             process.stdin.close()
 
-    def write_to_temporary(in_str: str):
+    def write_to_temporary(in_str: str) -> str:
         name = gen_temp_file_name()
-        with open(name, 'w') as f: f.write(in_str)
+        with open(name, 'w') as f:
+            f.write(in_str)
         return name
 
-    def get_item_fzf(items_: list[str]):
+    def get_item_fzf(items_: list[str]) -> str | None:
         items = "\n".join(items_)
         process = subprocess.Popen(['fzf'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         if process is not None and process.stdin is not None:
@@ -59,6 +61,7 @@ def run_command(lib: Library, command: str, params: list[str]):
             out_str = process.stdout.readline().split(" | ")[0]
             if len(out_str)==0: return None
             return out_str
+        return None
 
     optional0: str | None = params[0] if len(params)>0 else None
     
@@ -80,7 +83,7 @@ def run_command(lib: Library, command: str, params: list[str]):
 
         case 'lv':      print('\n'.join(get_videos_list_str(lib.get_all_videos(optional0))))
         case 'lvs':     print('\n'.join(get_videos_list_str(lib.get_all_single_videos(optional0))))
-        case 'lcv':     print('\n'.join(get_videos_list_str(lib.get_all_videos_from_channel(optional0))))
+        case 'lcv':     print('\n'.join(get_videos_list_str(lib.get_all_videos_from_channel(ChannelID(params[0])))))
         case 'lp':      print('\n'.join(get_playlists_list_str(lib.get_all_playlists(optional0))))
         case 'lpv':     print('\n'.join(get_playlist_videos_list_str(lib.get_playlist_videos(params[0]))))
 
