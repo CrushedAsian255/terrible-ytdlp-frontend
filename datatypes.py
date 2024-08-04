@@ -37,6 +37,15 @@ class ChannelID:
             raise ValueError(f"Error: Invalid ChannelID {value}")
         self.value = value
 
+class TagID:
+    __slots__ = ('value',)
+    def __str__(self) -> str: return self.value
+    def __init__(self, value: str) -> None:
+        if re.match(r"^[a-zA-Z0-9-_]+$",value) is None:
+            raise ValueError(f"Error: Invalid TagID {value}")
+        self.value = value
+
+
 class ChannelUUID:
     __slots__ = ('value',)
     @property
@@ -47,10 +56,29 @@ class ChannelUUID:
             raise ValueError(f"Error: Invalid ChannelUUID {value}")
         self.value = value
 
-VideoNumID = typing.NewType('VideoNumID',int)
-PlaylistNumID = typing.NewType('PlaylistNumID',int)
-ChannelNumID = typing.NewType('ChannelNumID',int)
-TagNumID = typing.NewType('TagNumID',int)
+class VideoNumID:
+    __slots__ = ('value',)
+    def __str__(self) -> str: return f"{self.value}"
+    def __int__(self) -> int: return self.value
+    def __init__(self, value: int) -> None: self.value = value
+
+class PlaylistNumID:
+    __slots__ = ('value',)
+    def __str__(self) -> str: return f"{self.value}"
+    def __int__(self) -> int: return self.value
+    def __init__(self, value: int) -> None: self.value = value
+
+class ChannelNumID:
+    __slots__ = ('value',)
+    def __str__(self) -> str: return f"{self.value}"
+    def __int__(self) -> int: return self.value
+    def __init__(self, value: int) -> None: self.value = value
+
+class TagNumID:
+    __slots__ = ('value',)
+    def __str__(self) -> str: return f"{self.value}"
+    def __int__(self) -> int: return self.value
+    def __init__(self, value: int) -> None: self.value = value
 
 def convert_file_size(size: int) -> str:
     size=int(size)

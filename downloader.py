@@ -15,7 +15,7 @@ class NoLog:
 
 InfoDict = dict[str,Any]
 
-def download_video(media_path: str, vid: str, max_res: int | None) -> InfoDict | None: 
+def download_video(media_path: str, vid: VideoID, max_res: int | None) -> InfoDict | None: 
     dl = yt_dlp.YoutubeDL({
         # "logger": NoLog,
         # "verbose": True,
@@ -38,21 +38,21 @@ def download_video(media_path: str, vid: str, max_res: int | None) -> InfoDict |
         ],
         "format_sort":[f"res{f":{max_res}" if max_res is not None else ""}","vcodec:vp9","acodec:opus"]
     })
-    dest_file = VideoID(vid).filename(media_path)
+    dest_file = vid.filename(media_path)
     info: InfoDict | None = {}
     if os.path.isfile(dest_file):
-        info = dl.extract_info(vid,download=False)
+        info = dl.extract_info(str(vid),download=False)
         if info is None: return None
         if info["is_live"] is True: return None
         return info
     else:
-        info = dl.extract_info(vid)
+        info = dl.extract_info(str(vid))
         if info is None: return None
         if info["is_live"] is True: return None
 
     src_file = f"/tmp/video_dl_{vid}.mkv"
     src_size = os.stat(src_file).st_size
-    os.makedirs(f"{media_path}/{ord(vid[0])-32}/{ord(vid[1])-32}",exist_ok=True)
+    os.makedirs(vid.filename(media_path),exist_ok=True)
     if os.path.isfile(dest_file):
         if src_size == os.stat(dest_file).st_size: return info
     with open(src_file, "rb") as src:
