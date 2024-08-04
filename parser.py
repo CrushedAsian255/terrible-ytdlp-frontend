@@ -10,7 +10,6 @@ import re
 yt_url_regex = r"(?:https?:\/\/)?(?:www.)?youtube.com(?:\.[a-z]+)?\/(?:watch\?v=|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)"
 
 def convert_duration(dur: int) -> str: return f"{int(dur/3600)}:{int(dur/60)%60:02d}:{dur%60:02d}"
-def gen_temp_file_name() -> str: return f"_tmp_{os.times().elapsed}.m3u"
 
 def print_channel(channel_id: str, channel_title: str) -> str:
     return channel_id if channel_title == channel_id[1:] else f"{channel_id} ({channel_title})"
@@ -43,12 +42,6 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
         if process is not None and process.stdin is not None:
             process.stdin.write(in_str)
             process.stdin.close()
-
-    def write_to_temporary(in_str: str) -> str:
-        name = gen_temp_file_name()
-        with open(name, 'w') as f:
-            f.write(in_str)
-        return name
 
     def get_item_fzf(items_: list[str]) -> str | None:
         items = "\n".join(items_)
@@ -96,13 +89,11 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
         case 'xlvs':    print(media_name(get_item_fzf(get_videos_list_str(lib.get_all_single_videos(optional0)))))
 
         case 'pp':      open_mpv(lib.create_playlist_m3u8(params[0]))
-        case 'fp':      print(write_to_temporary(lib.create_playlist_m3u8(params[0])))
         case 'xp':      print(lib.create_playlist_m3u8(params[0]))
         case 'plp':     open_mpv(lib.create_playlist_m3u8(get_item_fzf(get_playlists_list_str(lib.get_all_playlists(optional0)))))
         case 'xlp':     print(lib.create_playlist_m3u8(get_item_fzf(get_playlists_list_str(lib.get_all_playlists(optional0)))))
         
         case 'ppr':     open_mpv(lib.create_playlist_m3u8(params[0],True))
-        case 'fpr':     print(write_to_temporary(lib.create_playlist_m3u8(params[0],True)))
         case 'fpr':     print(lib.create_playlist_m3u8(params[0],True))
         case 'plpr':    open_mpv(lib.create_playlist_m3u8(get_item_fzf(get_playlists_list_str(lib.get_all_playlists(optional0))),True))
         case 'xlpr':    print(lib.create_playlist_m3u8(get_item_fzf(get_playlists_list_str(lib.get_all_playlists(optional0))),True))
@@ -133,7 +124,7 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
                     except FileNotFoundError: print(f"ERROR: Missing file: {VideoID(db_vid).filename()}")
             maximum = 5
             if optional0 is not None:
-                try:               maximum = int(optional0)
+                try: maximum = int(optional0)
                 except ValueError: pass
             for vid, size in video_sizes[maximum:0:-1]:
                 print(f"{vid} | {convert_file_size(size)}")
@@ -150,13 +141,13 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
                         try: size += os.path.getsize(VideoID(vid).filename(lib.media_dir))
                         except FileNotFoundError: print(f"ERROR: Missing file: {VideoID(vid).filename()}")
                 if size != 0: playlist_sizes.append((pid,size))
-                if len(playlists) > 100: print(f"Enumerating... ({idx1+1}/{len(playlists)})",end="\r")
-            if     len(playlists) > 100: print()
+                print(f"Enumerating... ({idx1+1}/{len(playlists)})",end="\r")
+            print()
                     
             playlist_sizes.sort(key=lambda x: -x[1])
             maximum = 5
             if optional0 is not None:
-                try:               maximum = int(optional0)
+                try: maximum = int(optional0)
                 except ValueError: pass
             for pid, size in playlist_sizes[maximum:0:-1]:
                 print(f"{pid} | {convert_file_size(size)}")

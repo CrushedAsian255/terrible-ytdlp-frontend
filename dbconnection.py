@@ -40,9 +40,6 @@ class PlaylistMetadata:
 class PlaylistMetadataVideoInfo(PlaylistMetadata): entries: list[VideoMetadataWithIndexAndChannelName]
 
 @dataclass(slots=True)
-class PlaylistMetadataVIDs(PlaylistMetadata): entries: list[str]
-
-@dataclass(slots=True)
 class PlaylistMetadataVCount(PlaylistMetadata): entries: int
 
 @dataclass(slots=True)
@@ -278,17 +275,15 @@ class Database:
             ''',(data[0][5],))],
             channel_name=data[0][6]
         )
-    def write_playlist_info(self, playlist: PlaylistMetadataVIDs) -> PlaylistNumID:
+    def write_playlist_info(self, playlist: PlaylistMetadata, entries: list[VideoID]) -> PlaylistNumID:
         if not verify_pid(playlist.id): raise ValueError(f"Invalid PID: {playlist.id}")
         if not verify_cid(playlist.channel): raise ValueError(f"Invalid CID: {playlist.channel}")
         db_out = self.exec('''
         INSERT OR REPLACE INTO Playlist(id,title,description,epoch,count,channel_id)
-        VALUES (?,?,?,?,?,(SELECT num_id FROM Channel WHERE id=?)) RETURNING (num_id)''',(playlist.id, playlist.title, playlist.description, int(playlist.epoch), len(playlist.entries), playlist.channel))
+        VALUES (?,?,?,?,?,(SELECT num_id FROM Channel WHERE id=?)) RETURNING (num_id)''',(playlist.id, playlist.title, playlist.description, int(playlist.epoch), len(entries), playlist.channel))
         pnumid = self.exec("SELECT num_id FROM Playlist WHERE id=?",(playlist.id,))[0][0]
         self.exec("DELETE FROM Pointer WHERE playlist_id=?",(pnumid,))
-        for vid in playlist.entries:
-            if not verify_vid(vid): raise ValueError(f"Invalid VID: {vid}")
-        for x in enumerate(playlist.entries):
+        for x in enumerate(entries):
             self.exec(f"INSERT INTO Pointer(playlist_id, video_id, position) VALUES (?,(SELECT num_id FROM Video WHERE id=?),?)",(pnumid,x[1],x[0]))
         self.connection.commit()
         return cast(PlaylistNumID,db_out[0][0])

@@ -79,14 +79,13 @@ class Library:
                 videos.append(x)
         for v in videos: self.download_video(v,False)
         self.db.write_playlist_info(
-            PlaylistMetadataVIDs(
+            PlaylistMetadata(
                 id=pid,
                 title=playlist_metadata['title'],
                 description=playlist_metadata['description'],
                 channel=playlist_metadata['uploader_id'],
-                epoch=playlist_metadata['epoch'],
-                entries=[v for v in videos if self.db.get_video_info(v)]
-            )
+                epoch=playlist_metadata['epoch']
+            ), [v for v in videos if self.db.get_video_info(v)]
         )
         self.db.add_tag_to_playlist(0, self.db.get_pnumid(pid))
     
