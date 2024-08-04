@@ -50,7 +50,7 @@ class Library:
         if info is None: return []
         return info.entries
 
-    def get_all_playlists(self, tag: str | None = None) -> list[PlaylistMetadataVCountWithChannelName]:
+    def get_all_playlists(self, tag: str | None = None) -> list[PlaylistMetadata[int]]:
         if tag: return self.db.get_playlists(self.db.get_tnumid(tag))
         else:   return self.db.get_playlists()
 
@@ -84,8 +84,10 @@ class Library:
                 title=playlist_metadata['title'],
                 description=playlist_metadata['description'],
                 channel=playlist_metadata['uploader_id'],
-                epoch=playlist_metadata['epoch']
-            ), [v for v in videos if self.db.get_video_info(v)]
+                channel_name=playlist_metadata['channel'],
+                epoch=playlist_metadata['epoch'],
+                entries=[v for v in videos if self.db.get_video_info(v)]
+            )
         )
         self.db.add_tag_to_playlist(0, self.db.get_pnumid(pid))
     

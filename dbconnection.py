@@ -4,6 +4,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, cast
 from datatypes import *
+from typing import TypeVar, Generic
 
 @dataclass(slots=True)
 class VideoMetadata:
@@ -22,25 +23,16 @@ class Tag:
     id: str
     long_name: str
 
+PlaylistEntriesType=TypeVar('PlaylistEntriesType')
 @dataclass(slots=True)
-class PlaylistMetadata:
+class PlaylistMetadata(Generic[PlaylistEntriesType]):
     id: str
     title: str
     description: str
     channel: str
     epoch: int
-
-@dataclass(slots=True)
-class PlaylistMetadataVideoInfo(PlaylistMetadata): entries: list[VideoMetadata]
-
-@dataclass(slots=True)
-class PlaylistMetadataVCount(PlaylistMetadata): entries: int
-
-@dataclass(slots=True)
-class PlaylistMetadataVCountWithChannelName(PlaylistMetadataVCount): channel_name: str
-
-@dataclass(slots=True)
-class PlaylistMetadataVideoInfoWithChannelName(PlaylistMetadataVideoInfo): channel_name: str
+    channel_name: str
+    entries: PlaylistEntriesType
 
 @dataclass(slots=True)
 class ChannelMetadata:
@@ -199,12 +191,12 @@ class Database:
         self.exec("INSERT OR REPLACE INTO Channel(id,title,description,epoch) VALUES (?,?,?,?)",(channel.id, channel.title, channel.description, int(channel.epoch)))
         self.connection.commit()
 
-    def get_playlists(self, tnumid_: int | list[int | None] | None = None) -> list[PlaylistMetadataVCountWithChannelName]:
+    def get_playlists(self, tnumid_: int | list[int | None] | None = None) -> list[PlaylistMetadata[int]]:
         tnumid: list[int] = []
         if type(tnumid_) is int: tnumid = [tnumid_]
         if type(tnumid_) is list[int | None]: tnumid = [x for x in tnumid_ if type(x) is int]
 
-        return [PlaylistMetadataVCountWithChannelName(
+        return [PlaylistMetadata[int](
             id=playlist[0],
             title=playlist[1],
             description=playlist[2],
@@ -231,7 +223,7 @@ class Database:
         if len(data) == 0: return None
         return cast(int | None,data[0][0])
 
-    def get_playlist_info(self, pid: str) -> PlaylistMetadataVideoInfoWithChannelName | None:
+    def get_playlist_info(self, pid: str) -> PlaylistMetadata[list[VideoMetadata]] | None:
         if not verify_pid(pid): raise ValueError(f"Invalid PID: {pid}")
         data = self.exec('''
         SELECT
@@ -241,7 +233,7 @@ class Database:
         WHERE Playlist.id=?
         ''',(pid,))
         if len(data) == 0: return None
-        return PlaylistMetadataVideoInfoWithChannelName(
+        return PlaylistMetadata[list[VideoMetadata]](
             id=data[0][0],
             title=data[0][1],
             description=data[0][2],
@@ -268,15 +260,15 @@ class Database:
             ''',(data[0][5],))],
             channel_name=data[0][6]
         )
-    def write_playlist_info(self, playlist: PlaylistMetadata, entries: list[VideoID]) -> PlaylistNumID:
+    def write_playlist_info(self, playlist: PlaylistMetadata[list[VideoID]]) -> PlaylistNumID:
         if not verify_pid(playlist.id): raise ValueError(f"Invalid PID: {playlist.id}")
         if not verify_cid(playlist.channel): raise ValueError(f"Invalid CID: {playlist.channel}")
         db_out = self.exec('''
         INSERT OR REPLACE INTO Playlist(id,title,description,epoch,count,channel_id)
-        VALUES (?,?,?,?,?,(SELECT num_id FROM Channel WHERE id=?)) RETURNING (num_id)''',(playlist.id, playlist.title, playlist.description, int(playlist.epoch), len(entries), playlist.channel))
+        VALUES (?,?,?,?,?,(SELECT num_id FROM Channel WHERE id=?)) RETURNING (num_id)''',(playlist.id, playlist.title, playlist.description, int(playlist.epoch), len(playlist.entries), playlist.channel))
         pnumid = self.exec("SELECT num_id FROM Playlist WHERE id=?",(playlist.id,))[0][0]
         self.exec("DELETE FROM Pointer WHERE playlist_id=?",(pnumid,))
-        for x in enumerate(entries):
+        for x in enumerate(playlist.entries):
             self.exec(f"INSERT INTO Pointer(playlist_id, video_id, position) VALUES (?,(SELECT num_id FROM Video WHERE id=?),?)",(pnumid,x[1],x[0]))
         self.connection.commit()
         return cast(PlaylistNumID,db_out[0][0])

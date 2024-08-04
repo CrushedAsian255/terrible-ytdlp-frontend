@@ -30,7 +30,7 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
             for index, video in enumerate(vids)
         ]
 
-    def get_playlists_list_str(playlists: list[PlaylistMetadataVCountWithChannelName]) -> list[str]:
+    def get_playlists_list_str(playlists: list[PlaylistMetadata[int]]) -> list[str]:
         return [
             f"{playlist.id} | {playlist.entries} video(s) | {print_channel(playlist.channel, playlist.channel_name)}: {playlist.title}"
             for playlist in playlists
