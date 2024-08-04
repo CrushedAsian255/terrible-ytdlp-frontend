@@ -4,22 +4,9 @@ from downloader import get_file_name, convert_file_size
 import subprocess
 import os
 
-from shutil import get_terminal_size
-from urwid.util import str_util
-
 import re
 
 yt_url_regex = r"(?:https?:\/\/)?(?:www.)?youtube.com(?:\.[a-z]+)?\/(?:watch\?v=|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)"
-
-def trunc(s, max_len: int | None = 20):
-    if max_len is None: return s
-    out_chars = ""
-    chars = 1
-    for c in s:
-        if chars > max_len: out_chars=out_chars[:-3]; out_chars += "..."; break
-        out_chars += c
-        chars += str_util.get_width(ord(c))
-    return out_chars
 
 def convert_duration(dur): return f"{int(dur/3600)}:{int(dur/60)%60:02d}:{dur%60:02d}"
 def gen_temp_file_name(): return f"_tmp_{os.times().elapsed}.m3u"
@@ -28,8 +15,6 @@ def print_channel(channel_id: str, channel_title: str):
     return channel_id if channel_title == channel_id[1:] else f"{channel_id} ({channel_title})"
 
 def run_command(lib: Library, command: str, params: list[str]):
-    max_line_len = get_terminal_size((80,20))[0]-5
-
     def media_name(vid: str | None):
         return None if vid is None else get_file_name(lib.media_dir,vid)
 
@@ -75,7 +60,7 @@ def run_command(lib: Library, command: str, params: list[str]):
             if len(out_str)==0: return None
             return out_str
 
-    optional0=params[0] if len(params)>0 else None
+    optional0: str | None = params[0] if len(params)>0 else None
     
     for x in range(len(params)):
         matched = re.match(yt_url_regex,params[x])
@@ -90,14 +75,14 @@ def run_command(lib: Library, command: str, params: list[str]):
         case 'dcp':     lib.download_channel(params[0],True)
 
         case 'tc':      lib.db.create_tag(params[0],params[1])
-        case 'tav':     lib.db.add_tag_to_video(params[0],params[1])
-        case 'tap':     lib.db.add_tag_to_playlist(params[0],params[1])
+        case 'tav':     lib.add_tag_to_video(params[0],params[1])
+        case 'tap':     lib.add_tag_to_playlist(params[0],params[1])
 
-        case 'lv':      print('\n'.join([trunc(x,max_line_len) for x in get_videos_list_str(lib.get_all_videos(optional0))]))
-        case 'lvs':     print('\n'.join([trunc(x, max_line_len) for x in get_videos_list_str(lib.get_all_single_videos(optional0))]))
-        case 'lcv':     print('\n'.join([trunc(x, max_line_len) for x in get_videos_list_str(lib.get_all_videos_from_channel(optional0))]))
-        case 'lp':      print('\n'.join([trunc(x,max_line_len) for x in get_playlists_list_str(lib.get_all_playlists(optional0))]))
-        case 'lpv':     print('\n'.join([trunc(x,max_line_len) for x in get_playlist_videos_list_str(lib.get_playlist_videos(optional0))]))
+        case 'lv':      print('\n'.join(get_videos_list_str(lib.get_all_videos(optional0))))
+        case 'lvs':     print('\n'.join(get_videos_list_str(lib.get_all_single_videos(optional0))))
+        case 'lcv':     print('\n'.join(get_videos_list_str(lib.get_all_videos_from_channel(optional0))))
+        case 'lp':      print('\n'.join(get_playlists_list_str(lib.get_all_playlists(optional0))))
+        case 'lpv':     print('\n'.join(get_playlist_videos_list_str(lib.get_playlist_videos(params[0]))))
 
         
         case 'pv':      open_mpv(media_name(params[0]))
@@ -146,11 +131,11 @@ def run_command(lib: Library, command: str, params: list[str]):
                 if len(lib.db.get_video_playlists(vid)) == 0:
                     try:                      video_sizes.append((vid,get_size(vid)))
                     except FileNotFoundError: print(f"ERROR: Missing file: {get_file_name("",vid)}")
-            video_sizes.sort(key=lambda x: -x[1])
+            maximum = 5
             if optional0 is not None:
-                try:               optional0 = int(optional0)
-                except ValueError: optional0 = None
-            for vid, size in video_sizes[optional0 or 5:0:-1]:
+                try:               maximum = int(optional0)
+                except ValueError: pass
+            for vid, size in video_sizes[maximum:0:-1]:
                 print(f"{vid} | {convert_file_size(size)}")
         case 'prune-p':
             playlists = [x.id for x in lib.get_all_playlists()]
@@ -170,10 +155,11 @@ def run_command(lib: Library, command: str, params: list[str]):
             if     len(playlists) > 100: print()
                     
             playlist_sizes.sort(key=lambda x: -x[1])
+            maximum = 5
             if optional0 is not None:
-                try:               optional0 = int(optional0)
-                except ValueError: optional0 = None
-            for pid, size in playlist_sizes[optional0 or 5:0:-1]:
+                try:               maximum = int(optional0)
+                except ValueError: pass
+            for pid, size in playlist_sizes[maximum:0:-1]:
                 print(f"{pid} | {convert_file_size(size)}")
 
         case _: print(f"Unknown command: {command}")
