@@ -112,9 +112,9 @@ class Library:
         else: self.save_channel_info(db_entry.channel)
 
     def save_channel_info(self, cid: str):
-        print(f"Downloading channel metadata: {cid}")
         db_entry = self.db.get_channel_info(cid)
         if db_entry is None:
+            print(f"Downloading channel metadata: {cid}")
             data = downloader.download_playlist_metadata(self.convert_playlist_id_to_url(f"about{cid}"),True)
             self.db.write_channel_info(ChannelMetadata(
                 id=cid,
