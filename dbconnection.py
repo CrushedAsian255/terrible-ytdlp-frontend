@@ -85,6 +85,8 @@ class Database:
         self.connection = sqlite3.connect(self.db_filename)
 
         self.exec("PRAGMA foreign_keys=ON")
+        self.connection.commit()
+        if self.exec("PRAGMA foreign_keys")[0][0] != 1: raise Exception("Build of sqlite3 does not support foreign keys")
 
         self.exec('''CREATE TABLE IF NOT EXISTS Channel (
             num_id INTEGER PRIMARY KEY,
@@ -172,16 +174,14 @@ class Database:
         self.exec("CREATE INDEX IF NOT EXISTS idx_tag_playlist ON TaggedPlaylist(tag_id)")
         self.exec("CREATE INDEX IF NOT EXISTS idx_tag_pid ON TaggedPlaylist(playlist_id)")
 
-        self.exec('''INSERT OR IGNORE INTO Tag(num_id,id,description) VALUES (?,?,?)''',(0,'',None))
+        self.exec("INSERT OR IGNORE INTO Tag(num_id,id,description) VALUES (?,?,?)",(0,'',None))
 
         self.connection.commit()
-
-        if self.exec("PRAGMA foreign_keys")[0][0] != 1: print("sqlite3 does not support foreign keys"); exit()
 
         int_check = self.exec("PRAGMA integrity_check")
         self.connection.commit()
 
-        if int_check[0][0]!='ok': print(f"!error db corrupt {int_check}"); exit()
+        if int_check[0][0]!='ok': raise Exception(f"FATAL ERROR: Database corrupt: {int_check}")
 
         self.exec("VACUUM",None,True)
         self.connection.commit()
