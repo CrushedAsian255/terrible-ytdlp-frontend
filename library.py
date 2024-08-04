@@ -45,7 +45,7 @@ class Library:
     def get_all_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadata]:
         return self.db.get_videos_from_channel(cid)
 
-    def get_playlist_videos(self, pid: str) -> list[VideoMetadataWithIndex]:
+    def get_playlist_videos(self, pid: str) -> list[VideoMetadata]:
         info = self.db.get_playlist_info(pid)
         if info is None: return []
         return info.entries

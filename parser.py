@@ -24,10 +24,10 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
             for video in vids
         ]
 
-    def get_playlist_videos_list_str(vids: list[VideoMetadataWithIndex]) -> list[str]:
+    def get_playlist_videos_list_str(vids: list[VideoMetadata]) -> list[str]:
         return [
-            f"{str(video.playlist_position+1).ljust(len(str(len(vids)+1)),' ')}: {video.id} | {convert_duration(video.duration)} | {print_channel(video.channel, video.channel_name)}: {video.title}"
-            for video in vids
+            f"{str(index+1).ljust(len(str(len(vids)+1)),' ')}: {video.id} | {convert_duration(video.duration)} | {print_channel(video.channel, video.channel_name)}: {video.title}"
+            for index, video in enumerate(vids)
         ]
 
     def get_playlists_list_str(playlists: list[PlaylistMetadataVCountWithChannelName]) -> list[str]:

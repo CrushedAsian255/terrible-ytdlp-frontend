@@ -17,10 +17,6 @@ class VideoMetadata:
     channel_name: str
 
 @dataclass(slots=True)
-class VideoMetadataWithIndex(VideoMetadata):
-    playlist_position: int
-
-@dataclass(slots=True)
 class Tag:
     num_id: int
     id: str
@@ -35,7 +31,7 @@ class PlaylistMetadata:
     epoch: int
 
 @dataclass(slots=True)
-class PlaylistMetadataVideoInfo(PlaylistMetadata): entries: list[VideoMetadataWithIndex]
+class PlaylistMetadataVideoInfo(PlaylistMetadata): entries: list[VideoMetadata]
 
 @dataclass(slots=True)
 class PlaylistMetadataVCount(PlaylistMetadata): entries: int
@@ -251,7 +247,7 @@ class Database:
             description=data[0][2],
             channel=data[0][4],
             epoch=int(data[0][3]),
-            entries=[VideoMetadataWithIndex(
+            entries=[VideoMetadata(
                 id=x[0],
                 title=x[1],
                 description=x[2],
@@ -259,12 +255,11 @@ class Database:
                 duration=int(x[4]),
                 epoch=int(x[5]),
                 channel=x[6],
-                playlist_position=int(x[7]),
-                channel_name=x[8]
+                channel_name=x[7]
             ) for x in self.exec('''
                 SELECT
                     Video.id,Video.title,Video.description,Video.upload_date,Video.duration,Video.epoch,
-                    Channel.id,Pointer.position,Channel.title
+                    Channel.id,Channel.title
                 FROM Video
                 RIGHT JOIN Pointer ON Video.num_id=Pointer.video_id
                 INNER JOIN Channel ON Video.channel_id=Channel.num_id
