@@ -27,7 +27,7 @@ class Library:
         m3ustring = "#EXTM3U\n#EXTENC:UTF-8\n"
         m3ustring += f"#PLAYLIST:{data.title}\n"
         for item in (list(reversed(data.entries)) if invert else data.entries):
-            m3ustring+=f"#EXTINF:{item.duration},{item.title}\n{get_file_name(self.media_dir,item.id)}\n"
+            m3ustring+=f"#EXTINF:{item.duration},{item.title}\n{downloader.get_file_name(self.media_dir,item.id)}\n"
         return m3ustring
 
     def add_tag_to_video(self, tag, vid):
