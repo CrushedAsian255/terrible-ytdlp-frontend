@@ -1,5 +1,5 @@
 from library import Library
-from downloader import get_file_name
+from downloader import get_file_name, convert_file_size
 
 import subprocess
 import os
@@ -123,9 +123,11 @@ def run_command(lib: Library, command: str, params: list[str]):
             videos_filesystem = [f[:-4] for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
             videos_database = [x.id for x in lib.get_all_videos()]
 
+            get_size_text = lambda s: convert_file_size(os.path.getsize(get_file_name(lib.media_dir,s)))
+
             for fs_vid in videos_filesystem:
                 if fs_vid not in videos_database:
-                    print(f"Orphaned file: {get_file_name("",fs_vid)}")
+                    print(f"Orphaned file: {get_file_name("",fs_vid)} | {get_size_text(fs_vid)}")
 
             for db_vid in videos_database:
                 if db_vid not in videos_filesystem:
@@ -134,6 +136,44 @@ def run_command(lib: Library, command: str, params: list[str]):
                 video_tags = lib.db.get_video_tags(db_vid)
                 video_playlists = [x[0] for x in lib.db.get_video_playlists(db_vid)]
                 if len(video_tags) == 0 and len(video_playlists) == 0:
-                    print(f"Orphaned video: {db_vid}")
+                    print(f"Orphaned video: {db_vid} | {get_size_text(db_vid)}")
+
+        case 'prune-v':
+            videos_database = [x.id for x in lib.get_all_single_videos()]
+            get_size = lambda s: os.path.getsize(get_file_name(lib.media_dir,s))
+            video_sizes = []
+            for vid in videos_database:
+                if len(lib.db.get_video_playlists(vid)) == 0:
+                    try:                      video_sizes.append((vid,get_size(vid)))
+                    except FileNotFoundError: print(f"ERROR: Missing file: {get_file_name("",vid)}")
+            video_sizes.sort(key=lambda x: -x[1])
+            if optional0 is not None:
+                try:               optional0 = int(optional0)
+                except ValueError: optional0 = None
+            for vid, size in video_sizes[optional0 or 5:0:-1]:
+                print(f"{vid} | {convert_file_size(size)}")
+        case 'prune-p':
+            playlists = [x.id for x in lib.get_all_playlists()]
+            get_size = lambda s: os.path.getsize(get_file_name(lib.media_dir,s))
+            playlist_sizes = []
+            for idx1, pid in enumerate(playlists):
+                size = 0
+                for vid in [x.id for x in lib.get_playlist_videos(pid)]:
+                    video_tags = lib.db.get_video_tags(vid)
+                    video_playlists = lib.db.get_video_playlists(vid)
+                    if len(video_playlists) == 0: print("This should not be possible")
+                    if len(video_tags) == 0 and len(video_playlists) == 1:
+                        try:                      size+=get_size(vid)
+                        except FileNotFoundError: print(f"ERROR: Missing file: {get_file_name("",vid)}")
+                if size != 0: playlist_sizes.append((pid,size))
+                if len(playlists) > 100: print(f"Enumerating... ({idx1+1}/{len(playlists)})",end="\r")
+            if     len(playlists) > 100: print()
+                    
+            playlist_sizes.sort(key=lambda x: -x[1])
+            if optional0 is not None:
+                try:               optional0 = int(optional0)
+                except ValueError: optional0 = None
+            for pid, size in playlist_sizes[optional0 or 5:0:-1]:
+                print(f"{pid} | {convert_file_size(size)}")
 
         case _: print(f"Unknown command: {command}")
