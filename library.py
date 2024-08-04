@@ -124,7 +124,7 @@ class Library:
         db_entry = self.db.get_channel_info(cid)
         if db_entry is None:
             print(f"Downloading channel metadata: {cid}")
-            data = downloader.download_playlist_metadata(cid.url,True)
+            data = downloader.download_playlist_metadata(cid.about_url,True)
             if data is None:
                 raise Exception(f"Error: unable to get channel info from {cid}")
             self.db.write_channel_info(ChannelMetadata(

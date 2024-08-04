@@ -6,6 +6,8 @@ class VideoID:
     @property
     def fileloc(self) -> str: return f"{ord(self.value[0])-32}/{ord(self.value[1])-32}/{self.value}.mkv"
     def filename(self, media_path: str = "") -> str: return f"{media_path}/{self.fileloc}"
+    def foldername(self, media_path: str = "") -> str: return f"{media_path}/{ord(self.value[0])-32}/{ord(self.value[1])-32}"
+    
     @property
     def url(self) -> str: return f"https://www.youtube.com/watch?v={self.value}"
     def __str__(self) -> str: return self.value
@@ -35,6 +37,8 @@ class ChannelID:
     def url(self) -> str: return f"https://www.youtube.com/{self.value}"
     @property
     def playlists_url(self) -> str: return f"https://www.youtube.com/{self.value}/playlists"
+    @property
+    def about_url(self) -> str: return f"https://www.youtube.com/{self.value}/about"
     def __str__(self) -> str: return self.value
     def __init__(self, value: str | None) -> None:
         if value is None: raise ValueError("Value does not exist")

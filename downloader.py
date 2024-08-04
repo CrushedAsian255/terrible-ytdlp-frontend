@@ -52,7 +52,7 @@ def download_video(media_path: str, vid: VideoID, max_res: int | None) -> InfoDi
 
     src_file = f"/tmp/video_dl_{vid}.mkv"
     src_size = os.stat(src_file).st_size
-    os.makedirs(vid.filename(media_path),exist_ok=True)
+    os.makedirs(vid.foldername(media_path),exist_ok=True)
     if os.path.isfile(dest_file):
         if src_size == os.stat(dest_file).st_size: return info
     with open(src_file, "rb") as src:
@@ -78,6 +78,6 @@ def download_playlist_metadata(purl: str , channel_mode: bool = False) -> InfoDi
         "extract_flat": (True if channel_mode else 'in_playlist'),
         "skip_download": True,
         "ignoreerrors": True,
-        "logger": NoLog
+        # "logger": NoLog
     })
     return cast(InfoDict | None,dl.extract_info(purl, download=False))
