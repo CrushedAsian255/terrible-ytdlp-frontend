@@ -15,9 +15,6 @@ def print_channel(channel_id: ChannelID, channel_title: str) -> str:
     return f"{channel_id} ({channel_title})"
 
 def run_command(lib: Library, command: str, params: list[str]) -> None:
-    def media_name(vid: str | None) -> str | None:
-        return None if vid is None else VideoID(vid).filename(lib.media_dir)
-
     def get_videos_list_str(vids: list[VideoMetadata]) -> list[str]:
         return [
             f"{video.id} | {convert_duration(video.duration)} | {print_channel(video.channel, video.channel_name)}: {video.title}"
@@ -56,10 +53,19 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
             return out_str
         return None
 
+    def pick_video_fzf(videos: list[VideoMetadata]) -> VideoID | None:
+        x = get_item_fzf(get_videos_list_str(videos))
+        if x is None: return None
+        return VideoID(x)
+
     def pick_playlist_fzf(playlists: list[PlaylistMetadata[Any]]) -> PlaylistID | None:
         x = get_item_fzf(get_playlists_list_str(playlists))
         if x is None: return None
         return PlaylistID(x)
+
+    def media_path(vid: VideoID | None) -> str | None:
+        if vid is None: return None
+        return vid.filename(lib.media_dir)
 
     optional0: str | None = params[0] if len(params)>0 else None
     givenTag: TagID | None = TagID(optional0) if optional0 else None
@@ -71,7 +77,7 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
 
     match command:
         case 'dv':      lib.download_video(VideoID(params[0]))
-        case 'sv':     lib.download_video(VideoID(params[0])); open_mpv(media_name(params[0]))
+        case 'sv':     lib.download_video(VideoID(params[0])); open_mpv(VideoID(params[0]).filename(lib.media_dir))
         case 'dp':      lib.download_playlist(PlaylistID(params[0]))
         case 'dc':      lib.download_channel(ChannelID(params[0]),False)
         case 'dcp':     lib.download_channel(ChannelID(params[0]),True)
@@ -87,12 +93,12 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
         case 'lpv':     print('\n'.join(get_playlist_videos_list_str(lib.get_playlist_videos(PlaylistID(params[0])))))
 
         
-        case 'pv':      open_mpv(media_name(params[0]))
-        case 'xv':      print(media_name(params[0]))
-        case 'plv':     open_mpv(media_name(get_item_fzf(get_videos_list_str(lib.get_all_videos(givenTag)))))
-        case 'xlv':     print(media_name(get_item_fzf(get_videos_list_str(lib.get_all_videos(givenTag)))))
-        case 'plvs':    open_mpv(media_name(get_item_fzf(get_videos_list_str(lib.get_all_single_videos(givenTag)))))
-        case 'xlvs':    print(media_name(get_item_fzf(get_videos_list_str(lib.get_all_single_videos(givenTag)))))
+        case 'pv':      open_mpv(VideoID(params[0]).filename(lib.media_dir))
+        case 'xv':      print(VideoID(params[0]).filename(lib.media_dir))
+        case 'plv':     open_mpv(media_path(pick_video_fzf(lib.get_all_videos(givenTag))))
+        case 'xlv':     print(media_path(pick_video_fzf(lib.get_all_videos(givenTag))))
+        case 'plvs':    open_mpv(media_path(pick_video_fzf(lib.get_all_single_videos(givenTag))))
+        case 'xlvs':    print(media_path(pick_video_fzf(lib.get_all_single_videos(givenTag))))
 
         case 'pp':      open_mpv(lib.create_playlist_m3u8(PlaylistID(params[0])))
         case 'xp':      print(lib.create_playlist_m3u8(PlaylistID(params[0])))
