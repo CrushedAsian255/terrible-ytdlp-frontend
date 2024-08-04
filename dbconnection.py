@@ -186,8 +186,6 @@ class Database:
         self.exec("VACUUM",None,True)
         self.connection.commit()
 
-        self.db_closed=False
-
     def get_channel_info(self, cid: str) -> ChannelMetadata | None:
         if not verify_cid(cid): raise ValueError(f"Invalid CID: {cid}")
         data = self.exec('''
@@ -433,8 +431,6 @@ class Database:
     def get_video_playlists(self, vid: str):
         return self.exec("SELECT playlist_id, position FROM Pointer WHERE video_id = (SELECT num_id FROM Video WHERE id = ?)", (vid,))
 
-    def exit(self):
-        if not self.db_closed:
-            self.db_closed = True
-            self.connection.commit()
-            self.connection.close()
+    def exit(self) -> None:
+        self.connection.commit()
+        self.connection.close()
