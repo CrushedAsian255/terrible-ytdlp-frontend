@@ -30,10 +30,16 @@ class Library:
             m3ustring+=f"#EXTINF:{item.duration},{item.title}\n{downloader.get_file_name(self.media_dir,item.id)}\n"
         return m3ustring
 
-    def add_tag_to_video(self, tag, vid):
+    def add_tag_to_video(self, tag: str, vid: str):
         self.db.add_tag_to_video(
             self.db.get_tid(tag),
             self.db.get_vnumid(vid)
+        )
+    
+    def add_tag_to_playlist(self, tag: str, pid: str):
+        self.db.add_tag_to_playlist(
+            self.db.get_tid(tag),
+            self.db.get_pnumid(pid)
         )
 
     def get_all_videos(self, tag: str | None = None):
@@ -47,8 +53,10 @@ class Library:
     def get_all_videos_from_channel(self, cid):
         return self.db.get_videos_from_channel(cid)
 
-    def get_playlist_videos(self, pid):
-        return self.db.get_playlist_info(pid).entries
+    def get_playlist_videos(self, pid: str):
+        info = self.db.get_playlist_info(pid)
+        if info is None: return None
+        return info.entries
 
     def get_all_playlists(self, tag=None):
         if tag: return self.db.get_playlists(self.db.get_tid(tag))
@@ -62,11 +70,8 @@ class Library:
         self.download_playlist(f"streams{cid}")
         
         if get_playlists:
-            playlists_grabber = PlaylistMetadataGrabber(self.convert_playlist_id_to_url(f"playlists{cid}"))
-            playlists_grabber.start()
-            playlists_grabber.join()
-            playlists = playlists_grabber.ret
-            if not (playlists is None):
+            playlists = downloader.download_playlist_metadata(self.convert_playlist_id_to_url(f"playlists{cid}"))
+            if playlists is not None:
                 playlist_count = len(playlists['entries'])
                 for i in range(playlist_count):
                     self.download_playlist(playlists['entries'][i]['id'])
