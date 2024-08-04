@@ -80,11 +80,11 @@ def download_video(media_path: str, vid: str, max_res: int | None):
     os.remove(src_file)
     return info
 
-def download_playlist_metadata(pid: str , channel_mode=False):
+def download_playlist_metadata(purl: str , channel_mode=False):
     dl = yt_dlp.YoutubeDL({
         "extract_flat": (True if channel_mode else 'in_playlist'),
         "skip_download": True,
         "ignoreerrors": True,
         "logger": NoLog
     })
-    return dl.extract_info(pid, download=False)
+    return dl.extract_info(purl, download=False)

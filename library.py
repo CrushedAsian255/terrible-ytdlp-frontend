@@ -98,6 +98,13 @@ class Library:
         if db_entry is None:
             video_metadata = downloader.download_video(self.media_dir, vid, self.max_video_resolution)
             if video_metadata is not None:
+                if type(video_metadata['uploader_id']) != str or len(video_metadata['uploader_id'])==0 or video_metadata['uploader_id'][0] != "@":
+                    if 'channel_id' in video_metadata and type(video_metadata['channel_id']) == str and video_metadata['channel_id'][0]=='U':
+                        print("Returned channel UUID instead of handle, resolving...")
+                        data = downloader.download_playlist_metadata(f"https://youtube.com/channel/{video_metadata['channel_id']}",True)
+                        video_metadata['uploader_id'] = data['uploader_id']
+                    else:
+                        raise Exception("Fatal error: no handle or Channel UUID returned, cannot continue")
                 self.save_channel_info(video_metadata['uploader_id'])
                 self.db.write_video_info(VideoMetadata(
                     id=vid,
