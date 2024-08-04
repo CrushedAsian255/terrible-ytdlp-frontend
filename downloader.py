@@ -1,4 +1,4 @@
-import yt_dlp
+import yt_dlp # type: ignore
 from threading import Thread, Lock
 import os
 
@@ -80,7 +80,7 @@ def download_video(media_path: str, vid: str, max_res: int | None):
     os.remove(src_file)
     return info
 
-def download_playlist_metadata(purl: str , channel_mode=False):
+def download_playlist_metadata(purl: str , channel_mode: bool = False):
     dl = yt_dlp.YoutubeDL({
         "extract_flat": (True if channel_mode else 'in_playlist'),
         "skip_download": True,
