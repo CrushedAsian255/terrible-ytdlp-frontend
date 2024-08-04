@@ -9,7 +9,8 @@ class VideoID:
     @property
     def url(self) -> str: return f"https://www.youtube.com/watch?v={self.value}"
     def __str__(self) -> str: return self.value
-    def __init__(self, value: str) -> None:
+    def __init__(self, value: str | None) -> None:
+        if value is None: raise ValueError("Value does not exist")
         if re.match(r"^[a-zA-Z0-9_-]{11}$",value) is None:
             raise ValueError(f"Error: Invalid VideoID {value}")
         self.value = value
@@ -22,7 +23,8 @@ class PlaylistID:
         if len(value) == 1: return f"https://www.youtube.com/playlist?list={value[0]}"
         else: return f"https://www.youtube.com/@{value[1]}/{value[0]}"
     def __str__(self) -> str: return self.value
-    def __init__(self, value: str) -> None:
+    def __init__(self, value: str | None) -> None:
+        if value is None: raise ValueError("Value does not exist")
         if re.match(r"^(videos|streams|shorts)@.*|PL[a-zA-Z0-9_-]{32}$",value) is None:
             raise ValueError(f"Error: Invalid PlaylistID {value}")
         self.value = value
@@ -31,8 +33,11 @@ class ChannelID:
     __slots__ = ('value',)
     @property
     def url(self) -> str: return f"https://www.youtube.com/{self.value}"
+    @property
+    def playlists_url(self) -> str: return f"https://www.youtube.com/{self.value}/playlists"
     def __str__(self) -> str: return self.value
-    def __init__(self, value: str) -> None:
+    def __init__(self, value: str | None) -> None:
+        if value is None: raise ValueError("Value does not exist")
         if re.match(r"^@.*$",value) is None:
             raise ValueError(f"Error: Invalid ChannelID {value}")
         self.value = value
@@ -40,7 +45,8 @@ class ChannelID:
 class TagID:
     __slots__ = ('value',)
     def __str__(self) -> str: return self.value
-    def __init__(self, value: str) -> None:
+    def __init__(self, value: str | None) -> None:
+        if value is None: raise ValueError("Value does not exist")
         if re.match(r"^[a-zA-Z0-9-_]+$",value) is None:
             raise ValueError(f"Error: Invalid TagID {value}")
         self.value = value

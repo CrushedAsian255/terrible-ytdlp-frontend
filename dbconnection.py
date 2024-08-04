@@ -237,13 +237,13 @@ class Database:
             channel=data[0][4],
             epoch=int(data[0][3]),
             entries=[VideoMetadata(
-                id=x[0],
+                id=VideoID(x[0]),
                 title=x[1],
                 description=x[2],
                 upload_date=int(x[3]),
                 duration=int(x[4]),
                 epoch=int(x[5]),
-                channel=x[6],
+                channel=ChannelID(x[6]),
                 channel_name=x[7]
             ) for x in self.exec('''
                 SELECT

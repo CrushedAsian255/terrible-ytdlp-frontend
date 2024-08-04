@@ -62,7 +62,7 @@ class Library:
         self.download_playlist(PlaylistID(f"streams{cid}"))
         
         if get_playlists:
-            playlists = downloader.download_playlist_metadata(PlaylistID(f"playlists{cid}").url)
+            playlists = downloader.download_playlist_metadata(cid.playlists_url)
             if playlists is not None:
                 playlist_count = len(playlists['entries'])
                 for i in range(playlist_count):
@@ -72,7 +72,7 @@ class Library:
         playlist_metadata = downloader.download_playlist_metadata(pid.url)
         if playlist_metadata is None: return None
         self.save_channel_info(ChannelID(playlist_metadata['uploader_id']))
-        videos_ = [x['id'] for x in playlist_metadata['entries']]
+        videos_ = [VideoID(x['id']) for x in playlist_metadata['entries']]
         videos = []
         for x in videos_:
             if x not in videos:

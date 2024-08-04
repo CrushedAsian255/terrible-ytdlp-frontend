@@ -68,7 +68,9 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
         return vid.filename(lib.media_dir)
 
     optional0: str | None = params[0] if len(params)>0 else None
-    givenTag: TagID | None = TagID(optional0) if optional0 else None
+    givenTag: TagID | None = None
+    try:               givenTag=TagID(optional0)
+    except ValueError: pass
 
     for x in range(len(params)):
         matched = re.match(yt_url_regex,params[x])
