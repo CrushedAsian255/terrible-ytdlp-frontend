@@ -2,6 +2,8 @@ import sqlite3
 import re
 import time
 from dataclasses import dataclass
+from typing import Any, cast
+from datatypes import *
 
 @dataclass(slots=True)
 class VideoMetadata:
@@ -62,7 +64,7 @@ def verify_pid(s: str) -> bool: return len(s) > 0 and (re.match('[^A-Za-z0-9-_]'
 def verify_cid(s: str) -> bool: return len(s) > 0 and (s[0] == '@') and (re.match('[^A-Za-z0-9-_]', s[1:]) is None)
 
 class Database:
-    def exec(self, sql: str, params: tuple | None = None, possibly_slow: bool | None = None) -> list[tuple]:
+    def exec(self, sql: str, params: tuple[Any, ...] | None = None, possibly_slow: bool | None = None) -> list[tuple[Any, ...]]:
         command = re.sub(r'[\n\t ]+', ' ', sql).strip()
         if self.print_db_log: print(f"DB command ---------\nSQL:{sum([ord(x) for x in sql])}\n{command}{f"\n{params=}" if params is not None else ""}")
         start = time.perf_counter_ns()
@@ -79,7 +81,7 @@ class Database:
         ))
         return out
 
-    def __init__(self, dbfname: str,print_db_log: bool | None):
+    def __init__(self, dbfname: str, print_db_log: bool):
         self.print_db_log = print_db_log
         self.db_filename = dbfname
         self.connection = sqlite3.connect(self.db_filename)
@@ -236,7 +238,7 @@ class Database:
         if not verify_pid(pid): raise ValueError(f"Invalid PID: {pid}")
         data = self.exec("SELECT num_id FROM Playlist WHERE id=?",(pid,))
         if len(data) == 0: return None
-        return data[0][0]
+        return cast(int | None,data[0][0])
 
     def get_playlist_info(self, pid: str) -> PlaylistMetadataVideoInfoWithChannelName | None:
         if not verify_pid(pid): raise ValueError(f"Invalid PID: {pid}")
@@ -276,7 +278,7 @@ class Database:
             ''',(data[0][5],))],
             channel_name=data[0][6]
         )
-    def write_playlist_info(self, playlist: PlaylistMetadataVIDs) -> int:
+    def write_playlist_info(self, playlist: PlaylistMetadataVIDs) -> PlaylistNumID:
         if not verify_pid(playlist.id): raise ValueError(f"Invalid PID: {playlist.id}")
         if not verify_cid(playlist.channel): raise ValueError(f"Invalid CID: {playlist.channel}")
         db_out = self.exec('''
@@ -289,9 +291,9 @@ class Database:
         for x in enumerate(playlist.entries):
             self.exec(f"INSERT INTO Pointer(playlist_id, video_id, position) VALUES (?,(SELECT num_id FROM Video WHERE id=?),?)",(pnumid,x[1],x[0]))
         self.connection.commit()
-        return db_out[0][0]
+        return cast(PlaylistNumID,db_out[0][0])
 
-    def get_videos(self, tnumid_: int | list[int | None] | None = None):
+    def get_videos(self, tnumid_: int | list[int | None] | None = None) -> list[VideoMetadataWithChannelName]:
         tnumid: list[int] = []
         if type(tnumid_) is int: tnumid = [tnumid_]
         if type(tnumid_) is list: tnumid = [x for x in tnumid_ if type(x) is int]
@@ -319,7 +321,7 @@ class Database:
             ) AS tagged ON Video.num_id = tagged.video_id;''' if len(tnumid) > 0 else ""}
         ''')]
 
-    def get_videos_from_channel(self, cid):
+    def get_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadataWithChannelName]:
         return [VideoMetadataWithChannelName(
             id=data[0],
             title=data[1],
@@ -336,11 +338,11 @@ class Database:
             INNER JOIN Channel ON Video.channel_id=Channel.num_id
             WHERE Video.channel_id=(SELECT num_id FROM Channel WHERE id='?')
         ''',(cid,))]
-    def get_vnumid(self, vid: str) -> int | None:
+    def get_vnumid(self, vid: str) -> VideoNumID | None:
         if not verify_vid(vid): raise ValueError(f"Invalid VID: {vid}")
         data = self.exec("SELECT num_id FROM Video WHERE id=?",(vid,))
         if len(data)==0: return None
-        return data[0][0]
+        return cast(VideoNumID,data[0][0])
     def get_video_info(self, vid: str) -> VideoMetadataWithChannelName | None:
         if not verify_vid(vid): raise ValueError(f"Invalid VID: {vid}")
         data = self.exec('''
@@ -361,7 +363,7 @@ class Database:
             channel=data[0][6],
             channel_name=data[0][7]
         )
-    def write_video_info(self, video: VideoMetadata) -> int:
+    def write_video_info(self, video: VideoMetadata) -> VideoNumID:
         if not verify_vid(video.id): raise ValueError(f"Invalid VID: {video.id}")
         if not verify_cid(video.channel): raise ValueError(f"Invalid CID: {video.channel}")
         db_out = self.exec('''
@@ -379,18 +381,19 @@ class Database:
             video.channel
         ))
         self.connection.commit()
-        return db_out[0][0]
+        return cast(VideoNumID,db_out[0][0])
 
-    def create_tag(self, tid: str, description: str) -> int:
+    def create_tag(self, tid: str, description: str) -> TagNumID:
         if not verify_tid(tid): raise ValueError(f"Invalid TID: {tid}")
         db_out = self.exec("INSERT INTO Tag(id,long_name) VALUES (?,?) RETURNING (num_id)",(tid,description))
         self.connection.commit()
-        return db_out[0][0]
-    def get_tid(self, tid: str) -> int | None:
+        return cast(TagNumID,db_out[0][0])
+    
+    def get_tnumid(self, tid: str) -> TagNumID | None:
         if not verify_tid(tid): return None
         output = self.exec("SELECT num_id FROM Tag WHERE id=?",(tid,))
         if len(output) == 0: return None
-        return output[0][0]
+        return cast(TagNumID,output[0][0])
 
     def get_tag_info(self, tid: str) -> Tag | None:
         if not verify_tid(tid): return None
@@ -406,29 +409,29 @@ class Database:
         self.exec("DELETE FROM Tag WHERE id=?",(tid,))
         self.connection.commit()
 
-    def add_tag_to_video(self, tnumid: int, vnumid: int | None) -> bool:
+    def add_tag_to_video(self, tnumid: int | None, vnumid: int | None) -> bool:
         if tnumid is None: return False
         if vnumid is None: return False
         self.exec("INSERT OR REPLACE INTO TaggedVideo(tag_id,video_id) VALUES (?,?)", (tnumid, vnumid))
         self.connection.commit()
         return True
-    def add_tag_to_playlist(self, tnumid: int, pnumid: int | None) -> bool:
+    def add_tag_to_playlist(self, tnumid: int | None, pnumid: int | None) -> bool:
         if tnumid is None: return False
         if pnumid is None: return False
         self.exec("INSERT OR REPLACE INTO TaggedPlaylist(tag_id,playlist_id) VALUES (?,?)",(tnumid,pnumid))
         self.connection.commit()
         return True
 
-    def get_video_tags(self, vid: str):
+    def get_video_tags(self, vid: str) -> list[TagNumID]:
         return [x[0] for x in self.exec("SELECT tag_id FROM TaggedVideo WHERE video_id = (SELECT num_id FROM Video WHERE id = ?)", (vid,))]
 
-    def get_playlist_tags(self, pid: str):
+    def get_playlist_tags(self, pid: str) -> list[TagNumID]:
         return [x[0] for x in self.exec("SELECT tag_id FROM TaggedPlaylist WHERE playlist_id = (SELECT num_id FROM Playlist WHERE id = ?)", (pid,))]
 
-    def get_playlist_tags_from_num_id(self, pnumid: int):
+    def get_playlist_tags_from_num_id(self, pnumid: int) -> list[TagNumID]:
         return [x[0] for x in self.exec("SELECT tag_id FROM TaggedPlaylist WHERE playlist_id = ?", (pnumid,))]
 
-    def get_video_playlists(self, vid: str):
+    def get_video_playlists(self, vid: str) -> list[tuple[PlaylistNumID,int]]:
         return self.exec("SELECT playlist_id, position FROM Pointer WHERE video_id = (SELECT num_id FROM Video WHERE id = ?)", (vid,))
 
     def exit(self) -> None:

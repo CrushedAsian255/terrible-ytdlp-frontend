@@ -1,28 +1,21 @@
 import yt_dlp # type: ignore
 import os
+from datatypes import *
+from typing import Any, cast
 
 concurrent_threads = 8
 
-def get_file_name(media_path, vid):
-    return f"{media_path}/{ord(vid[0])-32}/{ord(vid[1])-32}/{vid}.mkv"
-
 class NoLog:
-    def warning(self): pass
-    def debug(self): pass
-    def error(self): pass
+    @staticmethod
+    def warning(content: str) -> None: pass
+    @staticmethod
+    def debug(content: str) -> None: pass
+    @staticmethod
+    def error(content: str) -> None: pass
 
-def convert_file_size(size: int):
-    size=int(size)
-    if size < 2**10: return f"{size           } B"
-    if size < 2**20: return f"{size/(2**10):.02f} KiB"
-    if size < 2**30: return f"{size/(2**20):.02f} MiB"
-    if size < 2**40: return f"{size/(2**30):.02f} GiB"
-    if size < 2**50: return f"{size/(2**40):.02f} TiB"
-    if size < 2**60: return f"{size/(2**50):.02f} PiB"
-    if size < 2**70: return f"{size/(2**60):.02f} EiB"
-    else:            return f"{int(size/(2**60))} EiB"
+InfoDict = dict[str,Any]
 
-def download_video(media_path: str, vid: str, max_res: int | None): 
+def download_video(media_path: str, vid: str, max_res: int | None) -> InfoDict | None: 
     dl = yt_dlp.YoutubeDL({
         # "logger": NoLog,
         # "verbose": True,
@@ -45,7 +38,8 @@ def download_video(media_path: str, vid: str, max_res: int | None):
         ],
         "format_sort":[f"res{f":{max_res}" if max_res is not None else ""}","vcodec:vp9","acodec:opus"]
     })
-    dest_file = get_file_name(media_path, vid)
+    dest_file = VideoID(vid).filename(media_path)
+    info: InfoDict | None = {}
     if os.path.isfile(dest_file):
         info = dl.extract_info(vid,download=False)
         if info is None: return None
@@ -79,11 +73,11 @@ def download_video(media_path: str, vid: str, max_res: int | None):
     os.remove(src_file)
     return info
 
-def download_playlist_metadata(purl: str , channel_mode: bool = False):
+def download_playlist_metadata(purl: str , channel_mode: bool = False) -> InfoDict | None:
     dl = yt_dlp.YoutubeDL({
         "extract_flat": (True if channel_mode else 'in_playlist'),
         "skip_download": True,
         "ignoreerrors": True,
         "logger": NoLog
     })
-    return dl.extract_info(purl, download=False)
+    return cast(InfoDict | None,dl.extract_info(purl, download=False))
