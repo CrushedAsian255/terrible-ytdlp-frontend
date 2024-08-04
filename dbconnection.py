@@ -14,12 +14,10 @@ class VideoMetadata:
     duration: int
     epoch: int
     channel: str
+    channel_name: str
 
 @dataclass(slots=True)
-class VideoMetadataWithChannelName(VideoMetadata): channel_name: str
-
-@dataclass(slots=True)
-class VideoMetadataWithIndexAndChannelName(VideoMetadataWithChannelName):
+class VideoMetadataWithIndex(VideoMetadata):
     playlist_position: int
 
 @dataclass(slots=True)
@@ -37,7 +35,7 @@ class PlaylistMetadata:
     epoch: int
 
 @dataclass(slots=True)
-class PlaylistMetadataVideoInfo(PlaylistMetadata): entries: list[VideoMetadataWithIndexAndChannelName]
+class PlaylistMetadataVideoInfo(PlaylistMetadata): entries: list[VideoMetadataWithIndex]
 
 @dataclass(slots=True)
 class PlaylistMetadataVCount(PlaylistMetadata): entries: int
@@ -253,7 +251,7 @@ class Database:
             description=data[0][2],
             channel=data[0][4],
             epoch=int(data[0][3]),
-            entries=[VideoMetadataWithIndexAndChannelName(
+            entries=[VideoMetadataWithIndex(
                 id=x[0],
                 title=x[1],
                 description=x[2],
@@ -288,12 +286,12 @@ class Database:
         self.connection.commit()
         return cast(PlaylistNumID,db_out[0][0])
 
-    def get_videos(self, tnumid_: int | list[int | None] | None = None) -> list[VideoMetadataWithChannelName]:
+    def get_videos(self, tnumid_: int | list[int | None] | None = None) -> list[VideoMetadata]:
         tnumid: list[int] = []
         if type(tnumid_) is int: tnumid = [tnumid_]
         if type(tnumid_) is list: tnumid = [x for x in tnumid_ if type(x) is int]
 
-        return [VideoMetadataWithChannelName(
+        return [VideoMetadata(
             id=data[0],
             title=data[1],
             description=data[2],
@@ -316,8 +314,8 @@ class Database:
             ) AS tagged ON Video.num_id = tagged.video_id;''' if len(tnumid) > 0 else ""}
         ''')]
 
-    def get_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadataWithChannelName]:
-        return [VideoMetadataWithChannelName(
+    def get_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadata]:
+        return [VideoMetadata(
             id=data[0],
             title=data[1],
             description=data[2],
@@ -338,7 +336,7 @@ class Database:
         data = self.exec("SELECT num_id FROM Video WHERE id=?",(vid,))
         if len(data)==0: return None
         return cast(VideoNumID,data[0][0])
-    def get_video_info(self, vid: str) -> VideoMetadataWithChannelName | None:
+    def get_video_info(self, vid: str) -> VideoMetadata | None:
         if not verify_vid(vid): raise ValueError(f"Invalid VID: {vid}")
         data = self.exec('''
         SELECT
@@ -348,7 +346,7 @@ class Database:
         WHERE Video.id=?
         ''',(vid,))
         if len(data) == 0: return None
-        return VideoMetadataWithChannelName(
+        return VideoMetadata(
             id=data[0][0],
             title=data[0][1],
             description=data[0][2],

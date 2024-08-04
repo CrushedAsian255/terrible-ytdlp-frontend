@@ -34,18 +34,18 @@ class Library:
             self.db.get_pnumid(pid)
         )
 
-    def get_all_videos(self, tag: str | None = None) -> list[VideoMetadataWithChannelName]:
+    def get_all_videos(self, tag: str | None = None) -> list[VideoMetadata]:
         if tag: return self.db.get_videos(self.db.get_tnumid(tag))
         else:   return self.db.get_videos()
 
-    def get_all_single_videos(self, tag: str | None = None) -> list[VideoMetadataWithChannelName]:
+    def get_all_single_videos(self, tag: str | None = None) -> list[VideoMetadata]:
         if tag: return self.db.get_videos([0,self.db.get_tnumid(tag)])
         else:   return self.db.get_videos(0)
 
-    def get_all_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadataWithChannelName]:
+    def get_all_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadata]:
         return self.db.get_videos_from_channel(cid)
 
-    def get_playlist_videos(self, pid: str) -> list[VideoMetadataWithIndexAndChannelName]:
+    def get_playlist_videos(self, pid: str) -> list[VideoMetadataWithIndex]:
         info = self.db.get_playlist_info(pid)
         if info is None: return []
         return info.entries
@@ -110,9 +110,10 @@ class Library:
                     title=video_metadata['title'],
                     description=video_metadata['description'],
                     channel=video_metadata['uploader_id'],
+                    channel_name=video_metadata['channel'],
                     upload_date=video_metadata['upload_date'],
                     duration=video_metadata['duration'],
-                    epoch=video_metadata['epoch']
+                    epoch=video_metadata['epoch'],
                 ))
                 if add_tag: self.db.add_tag_to_video(0, self.db.get_vnumid(vid))
         else: self.save_channel_info(ChannelID(db_entry.channel))

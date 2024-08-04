@@ -18,13 +18,13 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
     def media_name(vid: str | None) -> str | None:
         return None if vid is None else VideoID(vid).filename(lib.media_dir)
 
-    def get_videos_list_str(vids: list[VideoMetadataWithChannelName]) -> list[str]:
+    def get_videos_list_str(vids: list[VideoMetadata]) -> list[str]:
         return [
             f"{video.id} | {convert_duration(video.duration)} | {print_channel(video.channel, video.channel_name)}: {video.title}"
             for video in vids
         ]
 
-    def get_playlist_videos_list_str(vids: list[VideoMetadataWithIndexAndChannelName]) -> list[str]:
+    def get_playlist_videos_list_str(vids: list[VideoMetadataWithIndex]) -> list[str]:
         return [
             f"{str(video.playlist_position+1).ljust(len(str(len(vids)+1)),' ')}: {video.id} | {convert_duration(video.duration)} | {print_channel(video.channel, video.channel_name)}: {video.title}"
             for video in vids
