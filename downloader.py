@@ -1,5 +1,4 @@
 import yt_dlp # type: ignore
-from threading import Thread, Lock
 import os
 
 concurrent_threads = 8
