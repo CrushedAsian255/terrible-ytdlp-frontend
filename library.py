@@ -18,7 +18,7 @@ class Library:
         self.online = True
         self.max_video_resolution = max_resolution
 
-    def exit(self): self.db.exit()
+    def exit(self) -> None: self.db.exit()
 
     def create_playlist_m3u8(self, pid: str | None, invert=False):
         if pid is None: return None

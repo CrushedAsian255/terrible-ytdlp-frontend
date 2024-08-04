@@ -12,7 +12,7 @@ from argparse import ArgumentParser
 import shutil
 import parser
 
-def main():
+def main() -> None:
     arg_parser = ArgumentParser(prog="ytd", description="YouTube downloader and database")
 
     arg_parser.add_argument("-m",       dest="media_dir",                             help="Path to media directory")

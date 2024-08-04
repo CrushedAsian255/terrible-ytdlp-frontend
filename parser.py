@@ -4,6 +4,8 @@ from downloader import get_file_name, convert_file_size
 import subprocess
 import os
 
+from typing import Callable
+
 import re
 
 yt_url_regex = r"(?:https?:\/\/)?(?:www.)?youtube.com(?:\.[a-z]+)?\/(?:watch\?v=|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)"
@@ -108,7 +110,7 @@ def run_command(lib: Library, command: str, params: list[str]):
             videos_filesystem = [f[:-4] for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
             videos_database = [x.id for x in lib.get_all_videos()]
 
-            get_size_text = lambda s: convert_file_size(os.path.getsize(get_file_name(lib.media_dir,s)))
+            get_size_text: Callable[[str], str] = lambda s: convert_file_size(os.path.getsize(get_file_name(lib.media_dir,s)))
 
             for fs_vid in videos_filesystem:
                 if fs_vid not in videos_database:
@@ -125,7 +127,7 @@ def run_command(lib: Library, command: str, params: list[str]):
 
         case 'prune-v':
             videos_database = [x.id for x in lib.get_all_single_videos()]
-            get_size = lambda s: os.path.getsize(get_file_name(lib.media_dir,s))
+            get_size: Callable[[str], int] = lambda s: os.path.getsize(get_file_name(lib.media_dir,s))
             video_sizes = []
             for vid in videos_database:
                 if len(lib.db.get_video_playlists(vid)) == 0:
@@ -139,7 +141,7 @@ def run_command(lib: Library, command: str, params: list[str]):
                 print(f"{vid} | {convert_file_size(size)}")
         case 'prune-p':
             playlists = [x.id for x in lib.get_all_playlists()]
-            get_size = lambda s: os.path.getsize(get_file_name(lib.media_dir,s))
+            get_size: Callable[[str], int] = lambda s: os.path.getsize(get_file_name(lib.media_dir,s))
             playlist_sizes = []
             for idx1, pid in enumerate(playlists):
                 size = 0
@@ -148,7 +150,7 @@ def run_command(lib: Library, command: str, params: list[str]):
                     video_playlists = lib.db.get_video_playlists(vid)
                     if len(video_playlists) == 0: print("This should not be possible")
                     if len(video_tags) == 0 and len(video_playlists) == 1:
-                        try:                      size+=get_size(vid)
+                        try:                      size += get_size(vid)
                         except FileNotFoundError: print(f"ERROR: Missing file: {get_file_name("",vid)}")
                 if size != 0: playlist_sizes.append((pid,size))
                 if len(playlists) > 100: print(f"Enumerating... ({idx1+1}/{len(playlists)})",end="\r")
