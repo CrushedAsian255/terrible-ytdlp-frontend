@@ -98,7 +98,7 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
         case 'plpr':    open_mpv(lib.create_playlist_m3u8(get_item_fzf(get_playlists_list_str(lib.get_all_playlists(optional0))),True))
         case 'xlpr':    print(lib.create_playlist_m3u8(get_item_fzf(get_playlists_list_str(lib.get_all_playlists(optional0))),True))
 
-        case 'prune':
+        case 'check':
             videos_filesystem = [f[:-4] for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
             videos_database = [x.id for x in lib.get_all_videos()]
 
@@ -115,20 +115,22 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
                 if video_tags == 0 and video_playlists == 0:
                     print(f"Orphaned video: {db_vid} | {convert_file_size(os.path.getsize(VideoID(db_vid).filename(lib.media_dir)))}")
 
-        case 'prune-v':
+        case 'size-v':
             videos_database = [x.id for x in lib.get_all_single_videos()]
             video_sizes = []
             for vid in videos_database:
                 if len(lib.db.get_video_playlists(vid)) == 0:
                     try: video_sizes.append((vid,os.path.getsize(VideoID(vid).filename(lib.media_dir))))
                     except FileNotFoundError: print(f"ERROR: Missing file: {VideoID(db_vid).filename()}")
+            
+            video_sizes.sort(key=lambda x: -x[1])
             maximum = 5
             if optional0 is not None:
                 try: maximum = int(optional0)
                 except ValueError: pass
             for vid, size in video_sizes[maximum:0:-1]:
                 print(f"{vid} | {convert_file_size(size)}")
-        case 'prune-p':
+        case 'size-p':
             playlists = [x.id for x in lib.get_all_playlists()]
             playlist_sizes = []
             for idx1, pid in enumerate(playlists):
