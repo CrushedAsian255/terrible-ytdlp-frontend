@@ -185,7 +185,7 @@ class Database:
         ''',(cid,))
         if len(data) == 0: return None
         return ChannelMetadata(
-            id=data[0][0],
+            id=ChannelID(data[0][0]),
             title=data[0][1],
             description=data[0][2],
             epoch=int(data[0][3])
@@ -196,11 +196,11 @@ class Database:
 
     def get_playlists(self, tnumid: list[TagNumID | None]=[]) -> list[PlaylistMetadata[int]]:
         return [PlaylistMetadata[int](
-            id=playlist[0],
+            id=PlaylistID(playlist[0]),
             title=playlist[1],
             description=playlist[2],
             epoch=int(playlist[4]),
-            channel=playlist[5],
+            channel=ChannelID(playlist[5]),
             entries=int(playlist[3]),
             channel_name=playlist[6]
         ) for playlist in self.exec(f'''
@@ -219,7 +219,7 @@ class Database:
     def get_pnumid(self, pid: PlaylistID) -> PlaylistNumID | None:
         data = self.exec("SELECT num_id FROM Playlist WHERE id=?",(pid,))
         if len(data) == 0: return None
-        return PlaylistNumID(cast(int,data[0][0]))
+        return PlaylistNumID(data[0][0])
 
     def get_playlist_info(self, pid: PlaylistID) -> PlaylistMetadata[list[VideoMetadata]] | None:
         data = self.exec('''
@@ -231,10 +231,10 @@ class Database:
         ''',(pid,))
         if len(data) == 0: return None
         return PlaylistMetadata[list[VideoMetadata]](
-            id=data[0][0],
+            id=PlaylistID(data[0][0]),
             title=data[0][1],
             description=data[0][2],
-            channel=data[0][4],
+            channel=ChannelID(data[0][4]),
             epoch=int(data[0][3]),
             entries=[VideoMetadata(
                 id=VideoID(x[0]),
@@ -266,17 +266,17 @@ class Database:
         for x in enumerate(playlist.entries):
             self.exec(f"INSERT INTO Pointer(playlist_id, video_id, position) VALUES (?,(SELECT num_id FROM Video WHERE id=?),?)",(pnumid,x[1],x[0]))
         self.connection.commit()
-        return cast(PlaylistNumID,db_out[0][0])
+        return PlaylistNumID(db_out[0][0])
 
     def get_videos(self, tnumid: list[TagNumID | None]=[]) -> list[VideoMetadata]:
         return [VideoMetadata(
-            id=data[0],
+            id=VideoID(data[0]),
             title=data[1],
             description=data[2],
             upload_date=int(data[3]),
             duration=int(data[4]),
             epoch=data[5],
-            channel=data[6],
+            channel=ChannelID(data[6]),
             channel_name=data[7]
         ) for data in self.exec(f'''
             SELECT
@@ -294,13 +294,13 @@ class Database:
 
     def get_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadata]:
         return [VideoMetadata(
-            id=data[0],
+            id=VideoID(data[0]),
             title=data[1],
             description=data[2],
             upload_date=int(data[3]),
             duration=int(data[4]),
             epoch=data[5],
-            channel=data[6],
+            channel=ChannelID(data[6]),
             channel_name=data[7]
         ) for data in self.exec('''
             SELECT
@@ -312,7 +312,7 @@ class Database:
     def get_vnumid(self, vid: VideoID) -> VideoNumID | None:
         data = self.exec("SELECT num_id FROM Video WHERE id=?",(vid,))
         if len(data)==0: return None
-        return cast(VideoNumID,data[0][0])
+        return VideoNumID(data[0][0])
     def get_video_info(self, vid: VideoID) -> VideoMetadata | None:
         data = self.exec('''
         SELECT
@@ -323,13 +323,13 @@ class Database:
         ''',(vid,))
         if len(data) == 0: return None
         return VideoMetadata(
-            id=data[0][0],
+            id=VideoID(data[0][0]),
             title=data[0][1],
             description=data[0][2],
             upload_date=int(data[0][3]),
             duration=int(data[0][4]),
             epoch=data[0][5],
-            channel=data[0][6],
+            channel=ChannelID(data[0][6]),
             channel_name=data[0][7]
         )
     def write_video_info(self, video: VideoMetadata) -> VideoNumID:
@@ -353,19 +353,19 @@ class Database:
     def create_tag(self, tid: TagID, description: str) -> TagNumID:
         db_out = self.exec("INSERT INTO Tag(id,long_name) VALUES (?,?) RETURNING (num_id)",(tid,description))
         self.connection.commit()
-        return cast(TagNumID,db_out[0][0])
+        return TagNumID(db_out[0][0])
     
     def get_tnumid(self, tid: TagID) -> TagNumID | None:
         output = self.exec("SELECT num_id FROM Tag WHERE id=?",(tid,))
         if len(output) == 0: return None
-        return cast(TagNumID,output[0][0])
+        return TagNumID(output[0][0])
 
     def get_tag_info(self, tid: TagID) -> Tag | None:
         output = self.exec("SELECT num_id,id,long_name FROM Tag WHERE id=?",(tid,))
         if len(output) == 0: return None
         return Tag(
-            num_id=output[0][0],
-            id=output[0][1],
+            num_id=TagNumID(output[0][0]),
+            id=TagID(output[0][1]),
             long_name=output[0][2]
         )
     def delete_tag(self, tid: TagID) ->  None:
@@ -375,27 +375,27 @@ class Database:
     def add_tag_to_video(self, tnumid: TagNumID | None, vnumid: VideoNumID | None) -> bool:
         if tnumid is None: return False
         if vnumid is None: return False
-        self.exec("INSERT OR REPLACE INTO TaggedVideo(tag_id,video_id) VALUES (?,?)", (int(tnumid), int(vnumid)))
+        self.exec("INSERT OR REPLACE INTO TaggedVideo(tag_id,video_id) VALUES (?,?)", (tnumid, vnumid))
         self.connection.commit()
         return True
     def add_tag_to_playlist(self, tnumid: TagNumID | None, pnumid: PlaylistNumID | None) -> bool:
         if tnumid is None: return False
         if pnumid is None: return False
-        self.exec("INSERT OR REPLACE INTO TaggedPlaylist(tag_id,playlist_id) VALUES (?,?)",(int(tnumid),int(pnumid)))
+        self.exec("INSERT OR REPLACE INTO TaggedPlaylist(tag_id,playlist_id) VALUES (?,?)",(tnumid,pnumid))
         self.connection.commit()
         return True
 
     def get_video_tags(self, vid: VideoID) -> list[TagNumID]:
-        return [x[0] for x in self.exec("SELECT tag_id FROM TaggedVideo WHERE video_id = (SELECT num_id FROM Video WHERE id = ?)", (vid,))]
+        return [TagNumID(x[0]) for x in self.exec("SELECT tag_id FROM TaggedVideo WHERE video_id = (SELECT num_id FROM Video WHERE id = ?)", (vid,))]
 
     def get_playlist_tags(self, pid: PlaylistID) -> list[TagNumID]:
-        return [x[0] for x in self.exec("SELECT tag_id FROM TaggedPlaylist WHERE playlist_id = (SELECT num_id FROM Playlist WHERE id = ?)", (pid,))]
+        return [TagNumID(x[0]) for x in self.exec("SELECT tag_id FROM TaggedPlaylist WHERE playlist_id = (SELECT num_id FROM Playlist WHERE id = ?)", (pid,))]
 
     def get_playlist_tags_from_num_id(self, pnumid: PlaylistNumID) -> list[TagNumID]:
-        return [x[0] for x in self.exec("SELECT tag_id FROM TaggedPlaylist WHERE playlist_id = ?", (pnumid,))]
+        return [TagNumID(x[0]) for x in self.exec("SELECT tag_id FROM TaggedPlaylist WHERE playlist_id = ?", (pnumid,))]
 
     def get_video_playlists(self, vid: VideoID) -> list[tuple[PlaylistNumID,int]]:
-        return self.exec("SELECT playlist_id, position FROM Pointer WHERE video_id = (SELECT num_id FROM Video WHERE id = ?)", (vid,))
+        return [(PlaylistNumID(a),b) for a,b in self.exec("SELECT playlist_id, position FROM Pointer WHERE video_id = (SELECT num_id FROM Video WHERE id = ?)", (vid,))]
 
     def exit(self) -> None:
         self.connection.commit()

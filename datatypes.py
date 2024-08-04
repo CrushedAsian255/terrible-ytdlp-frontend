@@ -8,6 +8,7 @@ class VideoID:
     def filename(self, media_path: str = "") -> str: return f"{media_path}/{self.fileloc}"
     def foldername(self, media_path: str = "") -> str: return f"{media_path}/{ord(self.value[0])-32}/{ord(self.value[1])-32}"
     
+    def __eq__(self, other) -> bool: return self.value == other.value
     @property
     def url(self) -> str: return f"https://www.youtube.com/watch?v={self.value}"
     def __str__(self) -> str: return self.value
