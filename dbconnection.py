@@ -351,7 +351,7 @@ class Database:
         return cast(VideoNumID,db_out[0][0])
 
     def create_tag(self, tid: TagID, description: str) -> TagNumID:
-        db_out = self.exec("INSERT INTO Tag(id,long_name) VALUES (?,?) RETURNING (num_id)",(tid,description))
+        db_out = self.exec("INSERT INTO Tag(id,description) VALUES (?,?) RETURNING (num_id)",(tid,description))
         self.connection.commit()
         return TagNumID(db_out[0][0])
     
