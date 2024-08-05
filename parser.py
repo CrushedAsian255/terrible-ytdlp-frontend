@@ -4,7 +4,7 @@ from datatypes import *
 import subprocess
 import os
 from dbconnection import *
-from typing import Any
+from typing import Any, Union
 import re
 
 yt_url_regex = r"(?:https?:\/\/)?(?:www.)?youtube.com(?:\.[a-z]+)?\/(?:watch\?v=|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)"
@@ -14,7 +14,21 @@ def convert_duration(dur: int) -> str: return f"{int(dur/3600)}:{int(dur/60)%60:
 def print_channel(channel_id: ChannelID, channel_title: str) -> str:
     return f"{channel_id} ({channel_title})"
 
-def run_command(lib: Library, command: str, params: list[str]) -> None:
+InferredID=Union[VideoID,PlaylistID,ChannelID]
+def infer_type(url: str) -> InferredID:
+    re_match = re.match(yt_url_regex,url)
+    value = re_match.groups()[0] if re_match else url
+    try:   return ChannelID(value)
+    except ValueError: pass
+    try:   return PlaylistID(value)
+    except ValueError: pass
+    try:   return VideoID(value)
+    except ValueError: pass
+    raise ValueError(f"Unable to determine the format of {value}")
+
+def run_command(lib: Library, command: str, params: list[str], auxiliary: bool = False) -> None:
+    def fname(vid: VideoID) -> str: return vid.filename(lib.media_dir)
+
     def get_videos_list_str(vids: list[VideoMetadata]) -> list[str]:
         return [
             f"{video.id} | {convert_duration(video.duration)} | {print_channel(video.channel, video.channel_name)}: {video.title}"
@@ -65,7 +79,7 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
 
     def media_path(vid: VideoID | None) -> str | None:
         if vid is None: return None
-        return vid.filename(lib.media_dir)
+        return fname(vid)
 
     optional0: str | None = params[0] if len(params)>0 else None
     givenTag: TagID | None = None
@@ -77,40 +91,105 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
         if matched:
             params[x]=matched.groups()[0]
 
+    commands_helptext: list[tuple[str,list[str],str,list[str]|str|None]]=[
+        ("help"     , []             , "Show this help"                                  , None),
+        ("download" , ["url"]        , "Downloads the content <url>"                     , ["Video: play after downloading","Channel: Don't download channel playlists"]),
+        ("new-tag"  , ["tid","text"] , "Create new tag <tid> with desciption <text>"     , None),
+        ("add-tag"  , ["tid","url"]  , "Add tag <tid> to <url>"                          , None),
+        ("play"     , []             , "Pick and then play a video"                      , ["Write filename to stdout"]),
+        ("play"     , ["tid"]        , "Pick and then play a video with <tag>"           , ["Write filename to stdout"]),
+        ("play"     , ["vid"]        , "Play a video"                                    , ["Write filename to stdout"]),
+        ("play-pl"  , []             , "Pick and then play a playlist"                   , ["Play in reverse order"]),
+        ("play-pl"  , ["tid"]        , "Pick and then play a playlist with <tag>"        , ["Play in reverse order"]),
+        ("play-pl"  , ["pid"]        , "Play a playlist"                                 , ["Play in reverse order"]),
+        ("check"    , []             , "Check database and filesystem for orphans"       , None),
+        ("size-v"   , ["max"]        , "Find the largest untagged videos"                , None),
+        ("size-p"   , ["max"]        , "Find the playlist with largest possible savings" , None)
+    ]
+
+    command_found = False
+    for cmd,args,_,_ in commands_helptext:
+        if cmd == command:
+            command_found = True
+            if len(params) < len(args): 
+                print(f"Usage: {cmd} {" ".join([f"<{arg}>" for arg in args])}")
+                return
+            break
+            
+    if not command_found:
+        print(f"Unknown command: {command}\nUse 'help' for help")
+        return
+    
     match command:
-        case 'dv':      lib.download_video(VideoID(params[0]))
-        case 'sv':     lib.download_video(VideoID(params[0])); open_mpv(VideoID(params[0]).filename(lib.media_dir))
-        case 'dp':      lib.download_playlist(PlaylistID(params[0]))
-        case 'dc':      lib.download_channel(ChannelID(params[0]),False)
-        case 'dcp':     lib.download_channel(ChannelID(params[0]),True)
-
-        case 'tc':      lib.db.create_tag(TagID(params[0]),params[1])
-        case 'tav':     lib.add_tag_to_video(TagID(params[0]),VideoID(params[1]))
-        case 'tap':     lib.add_tag_to_playlist(TagID(params[0]),PlaylistID(params[1]))
-
-        case 'lv':      print('\n'.join(get_videos_list_str(lib.get_all_videos(givenTag))))
-        case 'lvs':     print('\n'.join(get_videos_list_str(lib.get_all_single_videos(givenTag))))
-        case 'lcv':     print('\n'.join(get_videos_list_str(lib.get_all_videos_from_channel(ChannelID(params[0])))))
-        case 'lp':      print('\n'.join(get_playlists_list_str(lib.get_all_playlists(givenTag))))
-        case 'lpv':     print('\n'.join(get_playlist_videos_list_str(lib.get_playlist_videos(PlaylistID(params[0])))))
-
+        case 'help':
+            for cmd,args,desc,alt in commands_helptext:
+                print(f"{cmd} {" ".join([f"<{arg}>" for arg in args])}\n{desc}")
+                if alt:
+                    print("Auxiliary function (-a):")
+                    for altline in alt:
+                        print(f"\t{altline}")
+                print()
         
-        case 'pv':      open_mpv(VideoID(params[0]).filename(lib.media_dir))
-        case 'xv':      print(VideoID(params[0]).filename(lib.media_dir))
-        case 'plv':     open_mpv(media_path(pick_video_fzf(lib.get_all_videos(givenTag))))
-        case 'xlv':     print(media_path(pick_video_fzf(lib.get_all_videos(givenTag))))
-        case 'plvs':    open_mpv(media_path(pick_video_fzf(lib.get_all_single_videos(givenTag))))
-        case 'xlvs':    print(media_path(pick_video_fzf(lib.get_all_single_videos(givenTag))))
+        case 'download':
+            url = infer_type(params[0])
+            match url:
+                case VideoID():
+                    lib.download_video(url)
+                    if auxiliary:
+                        open_mpv(fname(url))
+                case PlaylistID():
+                    lib.download_playlist(url)
+                case ChannelID():
+                    lib.download_channel(url,not auxiliary)
 
-        case 'pp':      open_mpv(lib.create_playlist_m3u8(PlaylistID(params[0])))
-        case 'xp':      print(lib.create_playlist_m3u8(PlaylistID(params[0])))
-        case 'plp':     open_mpv(lib.create_playlist_m3u8(pick_playlist_fzf(lib.get_all_playlists(givenTag))))
-        case 'xlp':     print(lib.create_playlist_m3u8(pick_playlist_fzf(lib.get_all_playlists(givenTag))))
+        case 'new-tag':
+            lib.db.create_tag(TagID(params[0]),params[1])
+
+        case 'add-tag':
+            tag = TagID(params[0])
+            url = infer_type(params[1])
+            match url:
+                case VideoID():
+                    lib.add_tag_to_video(tag,url)
+                case PlaylistID():
+                    lib.add_tag_to_playlist(tag,url)
+                case ChannelID():
+                    print("Error: cannot add tag to channel")
+
+        case 'play':
+            video_id = None
+            if len(params) == 0: 
+                video_id = pick_video_fzf(lib.get_all_videos())
+            else:
+                try:
+                    video_id = infer_type(params[0])
+                    if type(video_id) != VideoID:
+                        raise ValueError()
+                except ValueError:
+                    try:
+                        video_id = pick_video_fzf(lib.get_all_videos(TagID(params[0])))
+                    except ValueError:
+                        pass
+            if video_id is not None:
+                if auxiliary: print(fname(video_id))
+                else:         open_mpv(fname(video_id))
         
-        case 'ppr':     open_mpv(lib.create_playlist_m3u8(PlaylistID(params[0]),True))
-        case 'fpr':     print(lib.create_playlist_m3u8(PlaylistID(params[0]),True))
-        case 'plpr':    open_mpv(lib.create_playlist_m3u8(pick_playlist_fzf(lib.get_all_playlists(givenTag)),True))
-        case 'xlpr':    print(lib.create_playlist_m3u8(pick_playlist_fzf(lib.get_all_playlists(givenTag)),True))
+        case 'play-pl':
+            playlist_id = None
+            if len(params) == 0: 
+                playlist_id = pick_playlist_fzf(lib.get_all_playlists())
+            else:
+                try:
+                    playlist_id = infer_type(params[0])
+                    if type(playlist_id) != PlaylistID:
+                        raise ValueError()
+                except ValueError:
+                    try:
+                        playlist_id = pick_playlist_fzf(lib.get_all_playlists(TagID(params[0])))
+                    except ValueError:
+                        pass
+            if playlist_id is not None:
+                open_mpv(lib.create_playlist_m3u8(playlist_id,auxiliary))
 
         case 'check':
             videos_filesystem: list[VideoID] = [VideoID(f[:-4]) for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
@@ -118,32 +197,29 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
 
             for fs_vid in videos_filesystem:
                 if fs_vid not in videos_database:
-                    print(f"Orphaned file: {fs_vid.filename()} | {convert_file_size(os.path.getsize(fs_vid.filename(lib.media_dir)))}")
+                    print(f"Orphaned file: {fs_vid.filename()} | {convert_file_size(os.path.getsize(fname(fs_vid)))}")
 
             for db_vid in videos_database:
                 if db_vid not in videos_filesystem:
-                    print(f"ERROR: Missing file: {db_vid.filename()}")
+                    print(f"ERROR: Missing file: {db_vid.fileloc}")
                 
                 video_tags = len(lib.db.get_video_tags(db_vid))
                 video_playlists = len(lib.db.get_video_playlists(db_vid))
                 if video_tags == 0 and video_playlists == 0:
-                    print(f"Orphaned video: {db_vid} | {convert_file_size(os.path.getsize(db_vid.filename(lib.media_dir)))}")
-
+                    print(f"Orphaned video: {db_vid} | {convert_file_size(os.path.getsize(fname(db_vid)))}")
+        
         case 'size-v':
             videos_database = [x.id for x in lib.get_all_single_videos()]
             video_sizes = []
             for vid in videos_database:
                 if len(lib.db.get_video_playlists(vid)) == 0:
-                    try: video_sizes.append((vid,os.path.getsize(vid.filename(lib.media_dir))))
-                    except FileNotFoundError: print(f"ERROR: Missing file: {db_vid.filename()}")
+                    try: video_sizes.append((vid,os.path.getsize(fname(vid))))
+                    except FileNotFoundError: print(f"ERROR: Missing file: {db_vid.fileloc}")
             
             video_sizes.sort(key=lambda x: -x[1])
-            maximum = 5
-            if optional0 is not None:
-                try: maximum = int(optional0)
-                except ValueError: pass
-            for vid, size in video_sizes[maximum:0:-1]:
+            for vid, size in video_sizes[int(params[0]):0:-1]:
                 print(f"{vid} | {convert_file_size(size)}")
+        
         case 'size-p':
             playlists = [x.id for x in lib.get_all_playlists()]
             playlist_sizes = []
@@ -154,18 +230,12 @@ def run_command(lib: Library, command: str, params: list[str]) -> None:
                     video_playlists = len(lib.db.get_video_playlists(vid))
                     if video_playlists == 0: print("This should not be possible")
                     if video_tags == 0 and video_playlists == 1:
-                        try: size += os.path.getsize(vid.filename(lib.media_dir))
+                        try: size += os.path.getsize(fname(vid))
                         except FileNotFoundError: print(f"ERROR: Missing file: {vid.filename()}")
                 if size != 0: playlist_sizes.append((pid,size))
                 print(f"Enumerating... ({idx1+1}/{len(playlists)})",end="\r")
             print()
                     
             playlist_sizes.sort(key=lambda x: -x[1])
-            maximum = 5
-            if optional0 is not None:
-                try: maximum = int(optional0)
-                except ValueError: pass
-            for pid, size in playlist_sizes[maximum:0:-1]:
+            for pid, size in playlist_sizes[int(params[0]):0:-1]:
                 print(f"{pid} | {convert_file_size(size)}")
-
-        case _: print(f"Unknown command: {command}")

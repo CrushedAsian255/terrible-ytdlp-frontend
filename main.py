@@ -21,6 +21,7 @@ def main() -> None:
     arg_parser.add_argument("-v",       dest="print_db_log",    action='store_true',  help="Print all database requests")
     arg_parser.add_argument("-q",       dest="quiet",           action='store_true',  help="Quiet mode")
     arg_parser.add_argument("-l",       dest="library",         default='master',     help="Library name")
+    arg_parser.add_argument("-a",       dest="auxiliary",       action='store_true',  help="Perform auxiliary action (command specific)")
     arg_parser.add_argument("command",                                                help="Command")
     arg_parser.add_argument("params",   nargs='*',                                    help="Parameters")
     args = arg_parser.parse_args()
@@ -85,7 +86,7 @@ def main() -> None:
     no_extend_quit = False
     previous_cmd = ['']
 
-    parser.run_command(library, args.command, args.params)
+    parser.run_command(library, args.command, args.params, args.auxiliary)
     
     library.exit()
     try:
