@@ -42,26 +42,24 @@ class ChannelMetadata:
     epoch: int
 
 class Database:
-    def exec(self, sql: str, params: tuple[Any, ...] | None = None, possibly_slow: bool | None = None) -> list[tuple[Any, ...]]:
-        if params is not None:
-            new_params: list[Any] = []
-            for param in params:
-                match param:
-                    case str() | int(): new_params.append(param)
-                    case VideoNumID() | PlaylistNumID() | ChannelNumID() | TagNumID(): new_params.append(int(param))
-                    case VideoID() | PlaylistID() | ChannelID() | TagID(): new_params.append(str(param))
-                    case None: new_params.append(None)
-                    case _: print(f"Error: Did not expect {type(param)} | {param}")
-            params = tuple(new_params)
+    def exec(self, sql: str, params: tuple[Any, ...] | None = None) -> list[tuple[Any, ...]]:
+        if params is None: params = ()
+        new_params: list[Any] = []
+        for param in params:
+            match param:
+                case str() | int(): new_params.append(param)
+                case VideoNumID() | PlaylistNumID() | ChannelNumID() | TagNumID(): new_params.append(int(param))
+                case VideoID() | PlaylistID() | ChannelID() | TagID(): new_params.append(str(param))
+                case None: new_params.append(None)
+                case _: print(f"Error: Did not expect {type(param)} | {param}")
+        params = tuple(new_params)
         command = re.sub(r'[\n\t ]+', ' ', sql).strip()
-        if self.print_db_log: print(f"DB command ---------\nSQL:{sum([ord(x) for x in sql])}\n{command}{f"\n{params=}" if params is not None else ""}")
+        cmdref=f"{command.split(" ")[0]}:{sum([(((ord(x)+i)*i)>>2)&0x3f for i,x in enumerate(command)])&0xff}"
+        if self.print_db_log: print(f"[DEBUG] {cmdref} {command} \n{params=}")
         start = time.perf_counter_ns()
-        if params is not None:
-            out = self.connection.execute(command, params).fetchall()
-        else:
-            out = self.connection.execute(command).fetchall()
+        out = self.connection.execute(command, params).fetchall()
         end = time.perf_counter_ns()
-        if end - start > 15_000_000 and (possibly_slow is not True): print(f"!warning db command took {int((end-start)/1_000_000)} ms [SQL:{sum([ord(x) for x in sql])}]")
+        if end - start > 10_000_000: print(f"[WARNING] Command {int((end-start)/1_000_000)} ms [{cmdref}]")
         if self.print_db_log: print((
                 f"Time took: {(end-start)/1_000_000:.2f}ms\n"
                 f"Returned {len(out)} row(s)\n"
@@ -173,7 +171,9 @@ class Database:
 
         if int_check[0][0]!='ok': raise Exception(f"FATAL ERROR: Database corrupt: {int_check}")
 
-        self.exec("VACUUM",None,True)
+        print("[INFO] Loaded, vacuuming")
+        self.exec("VACUUM")
+        print("[INFO] Vacuum complete")
         self.connection.commit()
 
     def get_channel_info(self, cid: ChannelID) -> ChannelMetadata | None:

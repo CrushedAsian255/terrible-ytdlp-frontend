@@ -12,6 +12,13 @@ from argparse import ArgumentParser
 import shutil
 import parser
 
+def try_copy(src: str, dst: str) -> bool:
+    try:
+        shutil.copy(src, dst)
+    except FileNotFoundError:
+        return False
+    return True
+
 def main() -> None:
     arg_parser = ArgumentParser(prog="ytd", description="YouTube downloader and database")
 
@@ -26,7 +33,6 @@ def main() -> None:
     arg_parser.add_argument("params",   nargs='*',                                    help="Parameters")
     args = arg_parser.parse_args()
     bpath = os.path.expanduser("~/YouTube")
-    if args.library == '/': args.library = "master"
     if args.library == 'master' and (args.database_path or args.media_dir):
         print("Error: cannot use master db with custom paths")
         exit(1)
@@ -35,21 +41,14 @@ def main() -> None:
         exit(1)
     if args.max_resolution:
         args.library = f"{args.library}.{args.max_resolution}"
-    if args.library[0] == '.' and (args.media_dir is None):
+    if args.library[0] == '.' and args.media_dir is None:
         print("Error: cannot use hidden libraries in default media path")
         exit(1)
 
     lib_db = args.database_path if args.database_path else f"{bpath}/{args.library}.db"
 
-    try:
-        shutil.copy(f"{lib_db}.bak", f"{lib_db}.bak2")
-    except FileNotFoundError:
-        pass
-    
-    try:
-        shutil.copy(lib_db, f"{lib_db}.bak")
-    except FileNotFoundError:
-        is_first_backup=True
+    try_copy(f"{lib_db}.bak", f"{lib_db}.bak2")
+    is_first_backup = not try_copy(lib_db, f"{lib_db}.bak")
 
     media_dir = args.media_dir if args.media_dir else f"{bpath}/{args.library}"
 
@@ -60,18 +59,13 @@ def main() -> None:
     try:
         library = Library(lib_db,media_dir,args.max_resolution,args.print_db_log)
     except Exception as e:
-        try:
-            shutil.copy(f"{lib_db}.bak2", f"{lib_db}.bak")
-        except FileNotFoundError:
-            pass
+        try_copy(f"{lib_db}.bak2", f"{lib_db}.bak")
         print("Error loading database!")
         print(e)
         print(f"Attempting to revert to backup")
-        try:
-            shutil.copy(f"{lib_db}", f"{lib_db}.err")
-            shutil.copy(f"{lib_db}.bak", f"{lib_db}")
-        except FileNotFoundError:
-            print(f"No backup found, sorry mate :(")
+        shutil.copy(lib_db, f"{lib_db}.err")
+        if not try_copy(f"{lib_db}.bak", lib_db):
+            print("Sorry, no backup could be found")
             return
         try:
             library = Library(lib_db,media_dir,args.max_resolution,args.print_db_log)
@@ -82,13 +76,9 @@ def main() -> None:
             return
         print(f"Backup loaded successfully, corrupted version stored in {lib_db}.err")
 
-    extend_quit = False
-    no_extend_quit = False
-    previous_cmd = ['']
-
     parser.run_command(library, args.command, args.params, args.auxiliary)
-    
     library.exit()
+
     try:
         os.remove(f"{lib_db}.bak2")
     except FileNotFoundError:
