@@ -397,6 +397,15 @@ class Database:
     def get_video_playlists(self, vid: VideoID) -> list[tuple[PlaylistNumID,int]]:
         return [(PlaylistNumID(a),b) for a,b in self.exec("SELECT playlist_id, position FROM Pointer WHERE video_id = (SELECT num_id FROM Video WHERE id = ?)", (vid,))]
 
+    def remove_video(self, vid: VideoID) -> None:
+        self.exec("DELETE FROM Video WHERE id=?", (vid,))
+        self.connection.commit()
+    
+    def remove_videos(self, vids: list[VideoID]) -> None:
+        for vid in vids:
+            self.exec("DELETE FROM Video WHERE id=?", (vid,))
+        self.connection.commit()
+
     def exit(self) -> None:
         self.connection.commit()
         self.connection.close()

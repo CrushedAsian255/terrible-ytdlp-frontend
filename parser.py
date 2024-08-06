@@ -103,6 +103,8 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
         ("play-pl"  , ["tid"]        , "Pick and then play a playlist with <tag>"        , ["Play in reverse order"]),
         ("play-pl"  , ["pid"]        , "Play a playlist"                                 , ["Play in reverse order"]),
         ("check"    , []             , "Check database and filesystem for orphans"       , None),
+        ("prune"    , []             , "Remove orphaned videos from database"            , None),
+        ("purge"    , []             , "Delete orphaned videos from the filesystem"      , None),
         ("size-v"   , ["max"]        , "Find the largest untagged videos"                , None),
         ("size-p"   , ["max"]        , "Find the playlist with largest possible savings" , None)
     ]
@@ -195,10 +197,14 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
             videos_filesystem: list[VideoID] = [VideoID(f[:-4]) for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
             videos_database: list[VideoID] = [x.id for x in lib.get_all_videos()]
 
+            total_size=0
             for fs_vid in videos_filesystem:
                 if fs_vid not in videos_database:
-                    print(f"Orphaned file: {fs_vid.filename()} | {convert_file_size(os.path.getsize(fname(fs_vid)))}")
-
+                    size = os.path.getsize(fname(fs_vid))
+                    total_size += size
+                    print(f"Orphaned file: {fs_vid.filename()} | {convert_file_size(size)}")
+            if total_size > 0: print(f"Total orphaned file size: {convert_file_size(total_size)}")
+            
             for db_vid in videos_database:
                 if db_vid not in videos_filesystem:
                     print(f"ERROR: Missing file: {db_vid.fileloc}")
@@ -207,7 +213,31 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                 video_playlists = len(lib.db.get_video_playlists(db_vid))
                 if video_tags == 0 and video_playlists == 0:
                     print(f"Orphaned video: {db_vid} | {convert_file_size(os.path.getsize(fname(db_vid)))}")
-        
+
+        case 'prune':
+            videos_database: list[VideoID] = [x.id for x in lib.get_all_videos()]
+            videos_to_remove: list[VideoID] = []
+            for db_vid in videos_database:                
+                video_tags = len(lib.db.get_video_tags(db_vid))
+                video_playlists = len(lib.db.get_video_playlists(db_vid))
+                if video_tags == 0 and video_playlists == 0:
+                    print(f"Removing orphaned video: {db_vid}")
+                    videos_to_remove.append(db_vid)
+            print("Removing... ")
+            lib.db.remove_videos(videos_to_remove)
+
+        case 'purge':
+            videos_filesystem: list[VideoID] = [VideoID(f[:-4]) for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
+            videos_database: list[VideoID] = [x.id for x in lib.get_all_videos()]
+            
+            total_size=0
+            for fs_vid in videos_filesystem:
+                if fs_vid not in videos_database:
+                    size = os.path.getsize(fname(fs_vid))
+                    total_size += size
+                    os.remove(fname(fs_vid))
+            if total_size > 0: print(f"Removed file count: {convert_file_size(total_size)}")
+
         case 'size-v':
             videos_database = [x.id for x in lib.get_all_single_videos()]
             video_sizes = []
