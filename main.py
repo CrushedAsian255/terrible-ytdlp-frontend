@@ -41,16 +41,23 @@ def main() -> None:
         exit(1)
     if args.max_resolution:
         args.library = f"{args.library}.{args.max_resolution}"
-    if args.library[0] == '.' and args.media_dir is None:
-        print("Error: cannot use hidden libraries in default media path")
-        exit(1)
-
+    
     lib_db = args.database_path if args.database_path else f"{bpath}/{args.library}.db"
 
     try_copy(f"{lib_db}.bak", f"{lib_db}.bak2")
     is_first_backup = not try_copy(lib_db, f"{lib_db}.bak")
 
-    media_dir = args.media_dir if args.media_dir else f"{bpath}/{args.library}"
+    media_dir: str = args.media_dir if args.media_dir else f"{bpath}/{args.library}"
+    try:
+        with open(f"{bpath}/{args.library}","r") as f:
+            media_dir = f.read()
+    except FileNotFoundError: pass
+    except IsADirectoryError: pass
+    if args.media_dir:
+        media_dir = args.media_dir
+        with open(f"{bpath}/{args.library}","w") as f:
+            f.write(media_dir)
+
 
     os.makedirs(media_dir, exist_ok=True)
 

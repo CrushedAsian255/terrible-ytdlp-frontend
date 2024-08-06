@@ -1,8 +1,12 @@
 from dbconnection import *
 import downloader
 from datatypes import *
+import os
+import time
 
 zeroTag = TagNumID(0)
+
+youtube_all_paths = [16+x for x in range(10)] + [63,13] + [65+x for x in range(26)] + [33+x for x in range(26)]
 
 class Library:
     def __init__(self, db_filename: str, media_dir: str, max_resolution: int | None, print_db_log: bool):
@@ -15,7 +19,18 @@ class Library:
     def exit(self) -> None: self.db.exit()
 
     def get_all_filesystem_videos(self) -> list[VideoID]:
-        return [VideoID(f[:-4]) for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
+        start = time.perf_counter_ns()
+        videos_list = []
+        dir0list = [x for x in os.scandir(f"{self.media_dir}") if x.is_dir()]
+        for dir0idx, dir0item in enumerate(dir0list):
+            dir1list = [x for x in os.scandir(dir0item) if x.is_dir()]
+            for dir1idx, dir1item in enumerate(dir1list):
+                dir2list = [VideoID(x.name[:-4]) for x in os.scandir(dir1item) if not x.is_dir() and x.name[-4:]=='.mkv']
+                videos_list += dir2list
+            print(f"Enumerating directories: {dir0idx+1} / {len(dir0list)} ({len(videos_list)} items)",end="\r")
+        end = time.perf_counter_ns()
+        print(f"\nEnumerated {len(videos_list)} videos in {(end-start)/1_000_000_000:.2f} seconds")
+        return videos_list
 
     def create_playlist_m3u8(self, pid: PlaylistID | None, invert: bool = False) -> str:
         if pid is None: return ""

@@ -201,6 +201,7 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                     print(f"Orphaned file: {fs_vid.filename()} | {convert_file_size(size)}")
             if total_size > 0: print(f"Total orphaned file size: {convert_file_size(total_size)}")
             
+            total_size=0
             for db_vid in videos_database:
                 if db_vid not in videos_filesystem:
                     print(f"ERROR: Missing file: {db_vid.fileloc}")
@@ -208,8 +209,10 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                 video_tags = len(lib.db.get_video_tags(db_vid))
                 video_playlists = len(lib.db.get_video_playlists(db_vid))
                 if video_tags == 0 and video_playlists == 0:
-                    print(f"Orphaned video: {db_vid} | {convert_file_size(os.path.getsize(fname(db_vid)))}")
-
+                    size = os.path.getsize(fname(db_vid))
+                    total_size += size
+                    print(f"Orphaned video: {db_vid} | {convert_file_size(size)}")
+            if total_size > 0: print(f"Total orphaned video size: {convert_file_size(total_size)}")
         case 'prune':
             videos_to_remove: list[VideoID] = []
             
