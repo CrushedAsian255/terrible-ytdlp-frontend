@@ -171,8 +171,8 @@ class Database:
 
         if int_check[0][0]!='ok': raise Exception(f"FATAL ERROR: Database corrupt: {int_check}")
 
-        self.exec("VACUUM")
-        self.connection.commit()
+        # self.exec("VACUUM")
+        # self.connection.commit()
 
     def get_channel_info(self, cid: ChannelID) -> ChannelMetadata | None:
         data = self.exec('''

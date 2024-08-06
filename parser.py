@@ -213,7 +213,7 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
         case 'prune':
             videos_to_remove: list[VideoID] = []
             
-            for db_vid in list[VideoID] = [x.id for x in lib.get_all_videos()]:                
+            for db_vid in [x.id for x in lib.get_all_videos()]:                
                 video_tags = len(lib.db.get_video_tags(db_vid))
                 video_playlists = len(lib.db.get_video_playlists(db_vid))
                 if video_tags == 0 and video_playlists == 0:
