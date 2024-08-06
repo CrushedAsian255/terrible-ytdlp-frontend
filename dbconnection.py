@@ -171,9 +171,7 @@ class Database:
 
         if int_check[0][0]!='ok': raise Exception(f"FATAL ERROR: Database corrupt: {int_check}")
 
-        print("[INFO] Loaded, vacuuming")
         self.exec("VACUUM")
-        print("[INFO] Vacuum complete")
         self.connection.commit()
 
     def get_channel_info(self, cid: ChannelID) -> ChannelMetadata | None:
