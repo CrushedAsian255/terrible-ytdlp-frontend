@@ -190,7 +190,7 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                 open_mpv(lib.create_playlist_m3u8(playlist_id,auxiliary))
 
         case 'check':
-            videos_filesystem: list[VideoID] = [VideoID(f[:-4]) for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
+            videos_filesystem: list[VideoID] = lib.get_all_filesystem_videos()
             videos_database: list[VideoID] = [x.id for x in lib.get_all_videos()]
 
             total_size=0
@@ -211,9 +211,9 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                     print(f"Orphaned video: {db_vid} | {convert_file_size(os.path.getsize(fname(db_vid)))}")
 
         case 'prune':
-            videos_database: list[VideoID] = [x.id for x in lib.get_all_videos()]
             videos_to_remove: list[VideoID] = []
-            for db_vid in videos_database:                
+            
+            for db_vid in list[VideoID] = [x.id for x in lib.get_all_videos()]:                
                 video_tags = len(lib.db.get_video_tags(db_vid))
                 video_playlists = len(lib.db.get_video_playlists(db_vid))
                 if video_tags == 0 and video_playlists == 0:
@@ -223,11 +223,10 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
             lib.db.remove_videos(videos_to_remove)
 
         case 'purge':
-            videos_filesystem: list[VideoID] = [VideoID(f[:-4]) for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
             videos_database: list[VideoID] = [x.id for x in lib.get_all_videos()]
-            
+
             total_size=0
-            for fs_vid in videos_filesystem:
+            for fs_vid in lib.get_all_filesystem_videos():
                 if fs_vid not in videos_database:
                     size = os.path.getsize(fname(fs_vid))
                     total_size += size

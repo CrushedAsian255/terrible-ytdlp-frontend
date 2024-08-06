@@ -14,6 +14,9 @@ class Library:
 
     def exit(self) -> None: self.db.exit()
 
+    def get_all_filesystem_videos(self) -> list[VideoID]:
+        return [VideoID(f[:-4]) for f in [f0 for f1 in [f3[2] for f3 in os.walk(lib.media_dir)] for f0 in f1] if f[-4:] == ".mkv"]
+
     def create_playlist_m3u8(self, pid: PlaylistID | None, invert: bool = False) -> str:
         if pid is None: return ""
         data = self.db.get_playlist_info(pid)
