@@ -164,14 +164,12 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                 video_id = pick_video_fzf(lib.get_all_videos())
             else:
                 try:
-                    video_id = infer_type(params[0])
-                    if type(video_id) != VideoID:
-                        raise ValueError()
+                    video_id = VideoID(params[0])
                 except ValueError:
                     try:
                         video_id = pick_video_fzf(lib.get_all_videos(TagID(params[0])))
                     except ValueError:
-                        pass
+                        video_id = pick_video_fzf(lib.get_all_videos())
             if video_id is not None:
                 if auxiliary: print(fname(video_id))
                 else:         open_mpv(fname(video_id))
@@ -182,14 +180,12 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                 playlist_id = pick_playlist_fzf(lib.get_all_playlists())
             else:
                 try:
-                    playlist_id = infer_type(params[0])
-                    if type(playlist_id) != PlaylistID:
-                        raise ValueError()
+                    playlist_id = PlaylistID(params[0])
                 except ValueError:
                     try:
                         playlist_id = pick_playlist_fzf(lib.get_all_playlists(TagID(params[0])))
                     except ValueError:
-                        pass
+                        playlist_id = pick_playlist_fzf(lib.get_all_playlists())
             if playlist_id is not None:
                 open_mpv(lib.create_playlist_m3u8(playlist_id,auxiliary))
 

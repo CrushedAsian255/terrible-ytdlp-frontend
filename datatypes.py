@@ -61,7 +61,7 @@ class TagID:
     def __repr__(self) -> str: return f"TagID<{self.value}>"
     def __init__(self, value: str | None) -> None:
         if value is None: raise ValueError("Value does not exist")
-        if re.match(r"^[a-zA-Z0-9-_]{1,10}$",value) is None:
+        if re.match(r"^#[a-zA-Z0-9-_]+$",value) is None:
             raise ValueError(f"Error: Invalid TagID {value}")
         self.value = value
 
