@@ -14,7 +14,7 @@ def convert_duration(dur: int) -> str: return f"{int(dur/3600)}:{int(dur/60)%60:
 def print_channel(channel_id: ChannelID, channel_title: str) -> str:
     return f"{channel_id} ({channel_title})"
 
-InferredID=Union[VideoID,PlaylistID,ChannelID]
+InferredID=Union[VideoID,PlaylistID,ChannelID,TagID]
 def infer_type(url: str) -> InferredID:
     re_match = re.match(yt_url_regex,url)
     value = re_match.groups()[0] if re_match else url
@@ -161,15 +161,18 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                 case ChannelID() | TagID(): print("Error: Invalid input")
 
         case 'play':
-            content_id = None
+            content_id: InferredID | None = None
             try:
                 content_id = infer_type(params[0])
                 match content_id:
                     case VideoID() | PlaylistID(): pass
-                    case TagID(): video_id = infer_type(get_item_fzf(get_videos_list_str(lib.get_all_videos(content_id))+get_playlists_list_str(lib.get_all_playlists(content_id))))
+                    case TagID():
+                        item_id = get_item_fzf(get_videos_list_str(lib.get_all_videos(content_id))+get_playlists_list_str(lib.get_all_playlists(content_id)))
+                        if item_id is not None: content_id = infer_type(item_id)
                     case _: raise ValueError()
             except (ValueError, IndexError):
-                content_id = infer_type(get_item_fzf(get_videos_list_str(lib.get_all_videos())+get_playlists_list_str(lib.get_all_playlists())))
+                item_id = get_item_fzf(get_videos_list_str(lib.get_all_videos())+get_playlists_list_str(lib.get_all_playlists()))
+                if item_id is not None: content_id = infer_type(item_id)
             match content_id:
                 case VideoID(): open_mpv(fname(content_id))
                 case PlaylistID(): open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
@@ -240,7 +243,7 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
             lib.db.remove_videos(videos_to_remove)
 
         case 'purge':
-            videos_database: list[VideoID] = [x.id for x in lib.get_all_videos()]
+            videos_database = [x.id for x in lib.get_all_videos()]
 
             total_size=0
             for fs_vid in lib.get_all_filesystem_videos():
