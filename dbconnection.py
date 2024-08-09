@@ -212,7 +212,7 @@ class Database:
                 WHERE tag_id IN ({",".join([str(x) for x in tnumid if type(x) is TagNumID])})
                 GROUP BY playlist_id
                 HAVING COUNT(DISTINCT tag_id) = {len(tnumid)}
-            ) AS tagged ON Playlists.num_id = tagged.playlist_id;''' if len(tnumid) > 0 else ""}
+            ) AS tagged ON Playlist.num_id = tagged.playlist_id;''' if len(tnumid) > 0 else ""}
         ''')]
     def get_pnumid(self, pid: PlaylistID) -> PlaylistNumID | None:
         data = self.exec("SELECT num_id FROM Playlist WHERE id=?",(pid,))

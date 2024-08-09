@@ -96,9 +96,12 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
         ("download" , ["url"]        , "Downloads the content <url>"                     , ["Video: play after downloading","Channel: Don't download channel playlists"]),
         ("new-tag"  , ["tid","text"] , "Create new tag <tid> with desciption <text>"     , None),
         ("add-tag"  , ["tid","url"]  , "Add tag <tid> to <url>"                          , None),
-        ("play"     , []             , "Pick and then play a video"                      , ["Write filename to stdout"]),
-        ("play"     , ["tid"]        , "Pick and then play a video with <tag>"           , ["Write filename to stdout"]),
-        ("play"     , ["vid"]        , "Play a video"                                    , ["Write filename to stdout"]),
+        ("play"     , []             , "Pick and then play something"                    , ["Write filename to stdout"]),
+        ("play"     , ["tid"]        , "Pick and then play something with <tag>"         , ["Write filename to stdout"]),
+        ("play"     , ["url"]        , "Play something"                                  , ["Write filename to stdout"]),
+        ("play-v"   , []             , "Pick and then play a video"                      , ["Write filename to stdout"]),
+        ("play-v"   , ["tid"]        , "Pick and then play a video with <tag>"           , ["Write filename to stdout"]),
+        ("play-v"   , ["vid"]        , "Play a video"                                    , ["Write filename to stdout"]),
         ("play-pl"  , []             , "Pick and then play a playlist"                   , ["Play in reverse order"]),
         ("play-pl"  , ["tid"]        , "Pick and then play a playlist with <tag>"        , ["Play in reverse order"]),
         ("play-pl"  , ["pid"]        , "Play a playlist"                                 , ["Play in reverse order"]),
@@ -143,6 +146,8 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                     lib.download_playlist(url)
                 case ChannelID():
                     lib.download_channel(url,not auxiliary)
+                case TagID():
+                    print("Error: Invalid input")
 
         case 'new-tag':
             lib.db.create_tag(TagID(params[0]),params[1])
@@ -151,43 +156,52 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
             tag = TagID(params[0])
             url = infer_type(params[1])
             match url:
-                case VideoID():
-                    lib.add_tag_to_video(tag,url)
-                case PlaylistID():
-                    lib.add_tag_to_playlist(tag,url)
-                case ChannelID():
-                    print("Error: cannot add tag to channel")
+                case VideoID(): lib.add_tag_to_video(tag,url)
+                case PlaylistID(): lib.add_tag_to_playlist(tag,url)
+                case ChannelID() | TagID(): print("Error: Invalid input")
 
         case 'play':
-            video_id = None
-            if len(params) == 0: 
-                video_id = pick_video_fzf(lib.get_all_videos())
-            else:
-                try:
-                    video_id = VideoID(params[0])
-                except ValueError:
-                    try:
-                        video_id = pick_video_fzf(lib.get_all_videos(TagID(params[0])))
-                    except ValueError:
-                        video_id = pick_video_fzf(lib.get_all_videos())
-            if video_id is not None:
-                if auxiliary: print(fname(video_id))
-                else:         open_mpv(fname(video_id))
+            content_id = None
+            try:
+                content_id = infer_type(params[0])
+                match content_id:
+                    case VideoID() | PlaylistID(): pass
+                    case TagID(): video_id = infer_type(get_item_fzf(get_videos_list_str(lib.get_all_videos(content_id))+get_playlists_list_str(lib.get_all_playlists(content_id))))
+                    case _: raise ValueError()
+            except (ValueError, IndexError):
+                content_id = infer_type(get_item_fzf(get_videos_list_str(lib.get_all_videos())+get_playlists_list_str(lib.get_all_playlists())))
+            match content_id:
+                case VideoID(): open_mpv(fname(content_id))
+                case PlaylistID(): open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
+                case None: pass
+                case _: raise ValueError(content_id)
+
+        case 'play-v':
+            content_id = None
+            try:
+                content_id = infer_type(params[0])
+                match content_id:
+                    case VideoID(): pass
+                    case TagID(): content_id = pick_video_fzf(lib.get_all_videos(content_id))
+                    case _: raise ValueError()
+            except (ValueError, IndexError):
+                content_id = pick_video_fzf(lib.get_all_videos())
+            if content_id is not None:
+                if auxiliary: print(fname(content_id))
+                else:         open_mpv(fname(content_id))
         
         case 'play-pl':
-            playlist_id = None
-            if len(params) == 0: 
-                playlist_id = pick_playlist_fzf(lib.get_all_playlists())
-            else:
-                try:
-                    playlist_id = PlaylistID(params[0])
-                except ValueError:
-                    try:
-                        playlist_id = pick_playlist_fzf(lib.get_all_playlists(TagID(params[0])))
-                    except ValueError:
-                        playlist_id = pick_playlist_fzf(lib.get_all_playlists())
-            if playlist_id is not None:
-                open_mpv(lib.create_playlist_m3u8(playlist_id,auxiliary))
+            content_id = None
+            try:
+                content_id = infer_type(params[0])
+                match content_id:
+                    case PlaylistID(): pass
+                    case TagID(): content_id = pick_playlist_fzf(lib.get_all_playlists(content_id))
+                    case _: raise ValueError()
+            except (ValueError, IndexError):
+                content_id = pick_playlist_fzf(lib.get_all_playlists())
+            if content_id is not None:
+                open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
 
         case 'check':
             videos_filesystem: list[VideoID] = lib.get_all_filesystem_videos()
