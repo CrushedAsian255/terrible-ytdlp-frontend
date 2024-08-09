@@ -305,7 +305,23 @@ class Database:
                 Video.id, Video.title, Video.description, Video.upload_date, Video.duration, Video.epoch, Channel.id, Channel.title
             FROM Video
             INNER JOIN Channel ON Video.channel_id=Channel.num_id
-            WHERE Video.channel_id=(SELECT num_id FROM Channel WHERE id='?')
+            WHERE Video.channel_id=(SELECT num_id FROM Channel WHERE id=?)
+        ''',(cid,))]
+    def get_playlists_from_channel(self, cid: ChannelID) -> list[PlaylistMetadata[int]]:
+        return [PlaylistMetadata[int](
+            id=PlaylistID(playlist[0]),
+            title=playlist[1],
+            description=playlist[2],
+            epoch=int(playlist[4]),
+            channel=ChannelID(playlist[5]),
+            entries=int(playlist[3]),
+            channel_name=playlist[6]
+        ) for playlist in self.exec(f'''
+            SELECT
+                Playlist.id, Playlist.title, Playlist.description, Playlist.count, Playlist.epoch, Channel.id, Channel.title
+            FROM Playlist
+            INNER JOIN Channel ON Playlist.channel_id=Channel.num_id
+            WHERE Playlist.channel_id=(SELECT num_id FROM Channel WHERE id=?)
         ''',(cid,))]
     def get_vnumid(self, vid: VideoID) -> VideoNumID | None:
         data = self.exec("SELECT num_id FROM Video WHERE id=?",(vid,))

@@ -169,7 +169,9 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                     case TagID():
                         item_id = get_item_fzf(get_videos_list_str(lib.get_all_videos(content_id))+get_playlists_list_str(lib.get_all_playlists(content_id)))
                         if item_id is not None: content_id = infer_type(item_id)
-                    case _: raise ValueError()
+                    case ChannelID():
+                        item_id = get_item_fzf(get_videos_list_str(lib.get_all_videos_from_channel(content_id))+get_playlists_list_str(lib.get_all_playlists_from_channel(content_id)))
+                        if item_id is not None: content_id = infer_type(item_id)
             except (ValueError, IndexError):
                 item_id = get_item_fzf(get_videos_list_str(lib.get_all_videos())+get_playlists_list_str(lib.get_all_playlists()))
                 if item_id is not None: content_id = infer_type(item_id)
@@ -186,7 +188,8 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                 match content_id:
                     case VideoID(): pass
                     case TagID(): content_id = pick_video_fzf(lib.get_all_videos(content_id))
-                    case _: raise ValueError()
+                    case ChannelID(): content_id = pick_video_fzf(lib.get_all_videos_from_channel(content_id))
+                    case PlaylistID(): raise NotImplementedError("Not implemented")
             except (ValueError, IndexError):
                 content_id = pick_video_fzf(lib.get_all_videos())
             if content_id is not None:
@@ -200,7 +203,8 @@ def run_command(lib: Library, command: str, params: list[str], auxiliary: bool =
                 match content_id:
                     case PlaylistID(): pass
                     case TagID(): content_id = pick_playlist_fzf(lib.get_all_playlists(content_id))
-                    case _: raise ValueError()
+                    case ChannelID(): content_id = pick_playlist_fzf(lib.get_all_playlists_from_channel(content_id))
+                    case VideoID(): raise NotImplementedError("Impossible!")
             except (ValueError, IndexError):
                 content_id = pick_playlist_fzf(lib.get_all_playlists())
             if content_id is not None:
