@@ -317,7 +317,9 @@ class Database:
             INNER JOIN Channel ON Playlist.channel_id=Channel.num_id
             WHERE Playlist.channel_id=(SELECT num_id FROM Channel WHERE id=?)
         ''',(cid,))]
-    def get_vnumid(self, vid: VideoID) -> VideoNumID | None:
+    def get_vnumid(self, vid: VideoID | None) -> VideoNumID | None:
+        if vid is None:
+            return None
         data = self.exec("SELECT num_id FROM Video WHERE id=?",(vid,))
         if len(data)==0:
             return None
