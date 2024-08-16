@@ -8,7 +8,6 @@ from argparse import ArgumentParser
 
 from library import Library
 from datatypes import *
-from downloader import convert_file_size
 
 InferredID=Union[VideoID,PlaylistID,ChannelID,TagID]
 def infer_type(url: str) -> InferredID:
@@ -36,6 +35,33 @@ def infer_type(url: str) -> InferredID:
         pass
     raise ValueError(f"Unable to determine the format of {value}")
 
+def get_item_fzf(items: list[str]) -> str | None:
+    process = subprocess.Popen(
+        ['fzf'],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+    )
+    if process is not None and process.stdin is not None:
+        process.stdin.write("\n".join(items))
+        process.stdin.close()
+        if process.stdout is None:
+            return None
+        out_str = process.stdout.readline().split(" | ")[0]
+        if len(out_str)==0:
+            return None
+        return out_str
+    return None
+
+def open_mpv(in_str: str | None) -> None:
+    if in_str is None:
+        return
+    process = subprocess.Popen(
+        ['mpv', '--really-quiet', '--playlist=-'],
+        stdin=subprocess.PIPE, text=True
+    )
+    if process is not None and process.stdin is not None:
+        process.stdin.write(in_str)
+        process.stdin.close()
+
 def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool = False) -> None:
     def fname(vid: VideoID) -> str:
         return vid.filename(lib.media_dir)
@@ -51,34 +77,6 @@ def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool
             playlist.to_string()
             for playlist in playlists
         ]
-
-    def open_mpv(in_str: str | None) -> None:
-        if in_str is None:
-            return
-        process = subprocess.Popen(
-            ['mpv', '--really-quiet', '--playlist=-'],
-            stdin=subprocess.PIPE, text=True
-        )
-        if process is not None and process.stdin is not None:
-            process.stdin.write(in_str)
-            process.stdin.close()
-
-    def get_item_fzf(items_: list[str]) -> str | None:
-        items = "\n".join(items_)
-        process = subprocess.Popen(
-            ['fzf'],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-        )
-        if process is not None and process.stdin is not None:
-            process.stdin.write(items)
-            process.stdin.close()
-            if process.stdout is None:
-                return None
-            out_str = process.stdout.readline().split(" | ")[0]
-            if len(out_str)==0:
-                return None
-            return out_str
-        return None
 
     def pick_video_fzf(videos: list[VideoMetadata]) -> VideoID | None:
         x = get_item_fzf(get_videos_list_str(videos))
@@ -303,7 +301,7 @@ def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool
                 if size != 0:
                     playlist_sizes.append((pid,size))
                 print(f"Enumerating... ({idx1+1}/{len(playlists)})",end="\r")
-            print() 
+            print()
 
             playlist_sizes.sort(key=lambda x: -x[1])
             for pid, size in playlist_sizes[int(params[0]):0:-1]:
@@ -364,13 +362,13 @@ def main() -> None:
     try_copy(f"{lib_db}.bak", f"{lib_db}.bak2")
     media_dir: str = args.media_dir if args.media_dir else f"{bpath}/{args.library}"
     try:
-        with open(f"{bpath}/{args.library}","r") as f:
+        with open(f"{bpath}/{args.library}","r",encoding="utf-8") as f:
             media_dir = f.read()
     except (FileNotFoundError, IsADirectoryError):
         pass
     if args.media_dir:
         media_dir = args.media_dir
-        with open(f"{bpath}/{args.library}","w") as f:
+        with open(f"{bpath}/{args.library}","w",encoding="utf-8") as f:
             f.write(media_dir)
 
     os.makedirs(media_dir, exist_ok=True)
