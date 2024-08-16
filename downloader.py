@@ -47,25 +47,17 @@ def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None) -> 
         ]
     })
     dest_file = vid.filename(media_path)
-    info: InfoDict | None = {}
-    if os.path.isfile(dest_file):
-        info = dl.extract_info(str(vid),download=False)
-        if info is None:
-            return None
-        if info["is_live"] is True:
-            return None
-        return info
-    info = dl.extract_info(str(vid))
-    if info is None:
-        return None
-    if info["is_live"] is True:
+    info: InfoDict | None = dl.extract_info(str(vid),download=not os.path.isfile(dest_file))
+    if info is None or info["is_live"] is True:
         return None
 
     src_file = f"/tmp/video_dl_{vid}.mkv"
     src_size = os.stat(src_file).st_size
     os.makedirs(vid.foldername(media_path),exist_ok=True)
+
     if os.path.isfile(dest_file) and src_size == os.stat(dest_file).st_size:
         return info
+
     with open(src_file, "rb") as src:
         with open(f"{dest_file}.tmp", "wb") as dest:
             copied = 0
@@ -75,7 +67,10 @@ def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None) -> 
                     break
                 dest.write(blk)
                 copied += len(blk)
-                print(f"Copying file: {convert_file_size(copied)} / {convert_file_size(src_size)}, {copied*100/src_size:.01f}%",end="\r")
+                print(
+                    f"Copying file: {convert_file_size(copied)} / {convert_file_size(src_size)}, "
+                    f"{copied*100/src_size:.01f}%",end="\r"
+                )
     if os.stat(f"{dest_file}.tmp").st_size != src_size:
         print("\nError: file sizes don't match")
         return None

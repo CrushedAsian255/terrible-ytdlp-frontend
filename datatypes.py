@@ -1,8 +1,8 @@
 """Various datatypes used within the project"""
 
 import re
+import typing
 from dataclasses import dataclass
-from typing import TypeVar, Generic
 
 class VideoID:
     __slots__ = ('value',)
@@ -154,13 +154,7 @@ def convert_file_size(size: int) -> str:
         return f"{size/(2**20):.02f} MiB"
     if size < 2**40:
         return f"{size/(2**30):.02f} GiB"
-    if size < 2**50:
-        return f"{size/(2**40):.02f} TiB"
-    if size < 2**60:
-        return f"{size/(2**50):.02f} PiB"
-    if size < 2**70:
-        return f"{size/(2**60):.02f} EiB"
-    return f"{int(size/(2**60))} EiB"
+    return f"{size/(2**40):.02f} TiB"
 
 @dataclass(slots=True)
 class VideoMetadata:
@@ -183,9 +177,9 @@ class VideoMetadata:
     channel: ChannelID
     channel_name: str
 
-PlaylistEntriesT=TypeVar('PlaylistEntriesT')
+PlaylistEntriesT=typing.TypeVar('PlaylistEntriesT')
 @dataclass(slots=True)
-class PlaylistMetadata(Generic[PlaylistEntriesT]):
+class PlaylistMetadata(typing.Generic[PlaylistEntriesT]):
     @property
     def entry_count(self) -> int:
         match self.entries:

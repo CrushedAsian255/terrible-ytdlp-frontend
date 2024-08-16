@@ -24,7 +24,7 @@ class Database:
                     raise NotImplementedError(f"Error: Did not expect {type(param)} | {param}")
         params = tuple(new_params)
         command = re.sub(r'[\n\t ]+', ' ', sql).strip()
-        cmdref=f"{command.split(" ")[0]}:{sum((((ord(x)+i)*i)>>2)&0x3f for i,x in enumerate(command))&0xff}"
+        cmdref=f"{command.split(" ")[0]}:{sum((ord(x)*i)&0x2a for i,x in enumerate(command))&0xff}"
         if self.print_db_log:
             print(f"[DEBUG] {cmdref} {command} \n{params=}")
         start = time.perf_counter_ns()
@@ -143,10 +143,8 @@ class Database:
         int_check = self.exec("PRAGMA integrity_check")
         self.connection.commit()
 
-        if int_check[0][0]!='ok': raise IOError(f"FATAL ERROR: Database corrupt: {int_check}")
-
-        # self.exec("VACUUM")
-        # self.connection.commit()
+        if int_check[0][0]!='ok':
+            raise IOError(f"FATAL ERROR: Database corrupt: {int_check}")
 
     def get_channel_info(self, cid: ChannelID) -> ChannelMetadata | None:
         data = self.exec('''
@@ -424,15 +422,16 @@ class Database:
         return self.get_playlist_tags_from_num_id(self.get_pnumid(pid))
 
     def get_video_playlists(self, vid: VideoID) -> list[tuple[PlaylistNumID,int]]:
-        return [(PlaylistNumID(a),b) for a,b in self.exec("SELECT playlist_id, position FROM Pointer WHERE video_id = (SELECT num_id FROM Video WHERE id = ?)", (vid,))]
+        return [
+            (PlaylistNumID(a),b) for a,b in
+            self.exec(
+                "SELECT playlist_id, position FROM Pointer WHERE video_id = ?",
+                (self.get_vnumid(vid),)
+            )
+        ]
 
     def remove_video(self, vid: VideoID) -> None:
         self.exec("DELETE FROM Video WHERE id=?", (vid,))
-        self.connection.commit()
-
-    def remove_videos(self, vids: list[VideoID]) -> None:
-        for vid in vids:
-            self.exec("DELETE FROM Video WHERE id=?", (vid,))
         self.connection.commit()
 
     def exit(self) -> None:

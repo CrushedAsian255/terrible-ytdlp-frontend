@@ -7,7 +7,8 @@ from typing import Any, Union
 from argparse import ArgumentParser
 
 from library import Library
-from datatypes import *
+from datatypes import VideoID, PlaylistID, ChannelID, TagID
+from datatypes import VideoMetadata, PlaylistMetadata, convert_file_size
 
 InferredID=Union[VideoID,PlaylistID,ChannelID,TagID]
 def infer_type(url: str) -> InferredID:
@@ -62,33 +63,40 @@ def open_mpv(in_str: str | None) -> None:
         process.stdin.write(in_str)
         process.stdin.close()
 
+def pick_video_fzf(videos: list[VideoMetadata]) -> VideoID | None:
+    x = get_item_fzf([video.to_string() for video in videos])
+    if x is None:
+        return None
+    return VideoID(x)
+
+def pick_playlist_fzf(playlists: list[PlaylistMetadata[Any]]) -> PlaylistID | None:
+    x = get_item_fzf([playlist.to_string()for playlist in playlists])
+    if x is None:
+        return None
+    return PlaylistID(x)
+
+def pick_content_fzf(
+    videos: list[VideoMetadata],
+    playlists: list[PlaylistMetadata[Any]]
+) -> VideoID | PlaylistID | None:
+    x = get_item_fzf(
+        [video.to_string() for video in videos]+
+        [playlist.to_string()for playlist in playlists]
+    )
+    if x is None:
+        return None
+    out = infer_type(x)
+    match out:
+        case VideoID() | PlaylistID():
+            return out
+        case None:
+            return None
+        case _:
+            raise SystemError("what")
+
 def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool = False) -> None:
     def fname(vid: VideoID) -> str:
         return vid.filename(lib.media_dir)
-
-    def get_videos_list_str(vids: list[VideoMetadata]) -> list[str]:
-        return [
-            video.to_string()
-            for video in vids
-        ]
-
-    def get_playlists_list_str(playlists: list[PlaylistMetadata[int]]) -> list[str]:
-        return [
-            playlist.to_string()
-            for playlist in playlists
-        ]
-
-    def pick_video_fzf(videos: list[VideoMetadata]) -> VideoID | None:
-        x = get_item_fzf(get_videos_list_str(videos))
-        if x is None:
-            return None
-        return VideoID(x)
-
-    def pick_playlist_fzf(playlists: list[PlaylistMetadata[Any]]) -> PlaylistID | None:
-        x = get_item_fzf(get_playlists_list_str(playlists))
-        if x is None:
-            return None
-        return PlaylistID(x)
 
     commands_helptext: list[tuple[str,list[str],str,list[str]|str|None]]=[
         ("help"     , []             , "Show this help"                   , None),
@@ -160,26 +168,20 @@ def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool
                     case VideoID() | PlaylistID():
                         pass
                     case TagID():
-                        item_id = get_item_fzf(
-                            get_videos_list_str(lib.get_all_videos(content_id))+
-                            get_playlists_list_str(lib.get_all_playlists(content_id))
+                        content_id = pick_content_fzf(
+                            lib.get_all_videos(content_id),
+                            lib.get_all_playlists(content_id)
                         )
-                        if item_id is not None:
-                            content_id = infer_type(item_id)
                     case ChannelID():
-                        item_id = get_item_fzf(
-                            get_videos_list_str(lib.get_all_videos_from_channel(content_id))+
-                            get_playlists_list_str(lib.get_all_playlists_from_channel(content_id))
+                        content_id = pick_content_fzf(
+                            lib.get_all_videos_from_channel(content_id),
+                            lib.get_all_playlists_from_channel(content_id)
                         )
-                        if item_id is not None:
-                            content_id = infer_type(item_id)
             except (ValueError, IndexError):
-                item_id = get_item_fzf(
-                    get_videos_list_str(lib.get_all_videos())+
-                    get_playlists_list_str(lib.get_all_playlists())
+                content_id = pick_content_fzf(
+                    lib.get_all_videos(),
+                    lib.get_all_playlists()
                 )
-                if item_id is not None:
-                    content_id = infer_type(item_id)
             match content_id:
                 case VideoID():
                     open_mpv(fname(content_id))
@@ -260,7 +262,8 @@ def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool
                     print(f"Removing orphaned video: {db_vid}")
                     videos_to_remove.append(db_vid)
             print("Removing... ")
-            lib.db.remove_videos(videos_to_remove)
+            for vid in videos_to_remove:
+                lib.db.remove_video(vid)
         case 'purge':
             videos_database = [x.id for x in lib.get_all_videos()]
             total_size=0
@@ -361,11 +364,13 @@ def main() -> None:
     lib_db = args.database_path if args.database_path else f"{bpath}/{args.library}.db"
     try_copy(f"{lib_db}.bak", f"{lib_db}.bak2")
     media_dir: str = args.media_dir if args.media_dir else f"{bpath}/{args.library}"
+
     try:
         with open(f"{bpath}/{args.library}","r",encoding="utf-8") as f:
             media_dir = f.read()
     except (FileNotFoundError, IsADirectoryError):
         pass
+
     if args.media_dir:
         media_dir = args.media_dir
         with open(f"{bpath}/{args.library}","w",encoding="utf-8") as f:
