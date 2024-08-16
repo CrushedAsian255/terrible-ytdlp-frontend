@@ -46,6 +46,14 @@ class Database:
         self.print_db_log = print_db_log
         self.db_filename = dbfname
         self.connection = sqlite3.connect(self.db_filename)
+        try:
+            int_check = self.exec("PRAGMA integrity_check")
+        except sqlite3.DatabaseError as e:
+            raise IOError("Invalid database") from e
+        self.connection.commit()
+
+        if int_check[0][0]!='ok':
+            raise IOError(f"FATAL ERROR: Database corrupt: {int_check}")
 
         self.exec("PRAGMA foreign_keys=ON")
         self.connection.commit()
@@ -141,12 +149,6 @@ class Database:
         self.exec("INSERT OR IGNORE INTO Tag(num_id,id,description) VALUES (?,?,?)",(0,'',None))
 
         self.connection.commit()
-
-        int_check = self.exec("PRAGMA integrity_check")
-        self.connection.commit()
-
-        if int_check[0][0]!='ok':
-            raise IOError(f"FATAL ERROR: Database corrupt: {int_check}")
 
     def get_video_info(self, vid: VideoID) -> VideoMetadata | None:
         data = self.exec('''
@@ -267,7 +269,7 @@ class Database:
         )
         self.connection.commit()
 
-    def get_videos(self, tnumid: list[TagNumID | None]=[]) -> list[VideoMetadata]:
+    def get_videos(self, tnumid: list[TagNumID | None]) -> list[VideoMetadata]:
         return [VideoMetadata(
             id=VideoID(data[0]),
             title=data[1],
@@ -291,7 +293,7 @@ class Database:
                 HAVING COUNT(DISTINCT tag_id) = {len(tnumid)}
             ) AS tagged ON Video.num_id = tagged.video_id;''' if len(tnumid) > 0 else ""}
         ''')]
-    def get_playlists(self, tnumid: list[TagNumID | None]=[]) -> list[PlaylistMetadata[int]]:
+    def get_playlists(self, tnumid: list[TagNumID | None]) -> list[PlaylistMetadata[int]]:
         return [PlaylistMetadata[int](
             id=PlaylistID(playlist[0]),
             title=playlist[1],

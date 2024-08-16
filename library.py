@@ -70,7 +70,7 @@ class Library:
     def get_all_videos(self, tag: TagID | None = None) -> list[VideoMetadata]:
         if tag:
             return self.db.get_videos([self.db.get_tnumid(tag)])
-        return self.db.get_videos()
+        return self.db.get_videos([])
 
     def get_all_single_videos(self, tag: TagID | None = None) -> list[VideoMetadata]:
         if tag:
@@ -92,7 +92,7 @@ class Library:
     def get_all_playlists(self, tag: TagID | None = None) -> list[PlaylistMetadata[int]]:
         if tag:
             return self.db.get_playlists([self.db.get_tnumid(tag)])
-        return self.db.get_playlists()
+        return self.db.get_playlists([])
 
     def download_channel(self, cid: ChannelID, get_playlists: bool = False) -> None:
         self.download_playlist(PlaylistID(f"videos{cid}"))
@@ -188,3 +188,20 @@ class Library:
                 description=data['description'],
                 epoch=data['epoch']
             ))
+    def prune(self) -> None:
+        for db_vid in [x.id for x in self.get_all_videos()]:
+            video_tags = len(self.db.get_video_tags(db_vid))
+            video_playlists = len(self.db.get_video_playlists(db_vid))
+            if video_tags == 0 and video_playlists == 0:
+                print(f"Removing orphaned video: {db_vid}")
+                self.db.remove_video(db_vid)
+    def purge(self) -> int:
+        videos_database = [x.id for x in self.get_all_videos()]
+        total_size = 0
+        for fs_vid in self.get_all_filesystem_videos():
+            if fs_vid not in videos_database:
+                fname = fs_vid.filename(self.media_dir)
+                size = os.path.getsize(fname)
+                total_size += size
+                os.remove(fname)
+        return total_size
