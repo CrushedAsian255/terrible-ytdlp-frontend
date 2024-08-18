@@ -123,11 +123,13 @@ def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool
         case 'new-tag':
             if len(params) < 1:
                 print("Error: No tag ID given")
+                return
             lib.db.create_tag(TagID(params[0]),(params[1] if len(params) > 1 else ""))
         case 'add-tag':
             if len(params) < 2:
                 print("Error: Tag ID and URL required")
-            content_id = infer_type(params[0])
+                return
+            content_id = infer_type(params[1])
             match content_id:
                 case VideoID():
                     lib.add_tag_to_video(TagID(params[0]),content_id)
