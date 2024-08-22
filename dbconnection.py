@@ -2,6 +2,7 @@ import sqlite3
 import re
 import time
 from typing import Any, cast
+import sys
 
 from datatypes import VideoID, PlaylistID, ChannelID, TagID
 from datatypes import VideoNumID, PlaylistNumID, ChannelNumID, TagNumID
@@ -33,7 +34,7 @@ class Database:
         out = self.connection.execute(command, params).fetchall()
         end = time.perf_counter_ns()
         if end - start > 10_000_000:
-            print(f"[WARNING] Command {int((end-start)/1_000_000)} ms [{cmdref}]")
+            print(f"[WARNING] Command {int((end-start)/1_000_000)} ms [{cmdref}]",file=sys.stderr)
         if self.print_db_log:
             print(
                 f"Time took: {(end-start)/1_000_000:.2f}ms\n"
