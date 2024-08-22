@@ -32,7 +32,7 @@ def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None) -> 
         "ignoreerrors": True,
         "match_filter": lambda x: 'Skipped: Live video' if x['is_live'] else None,
         "writesubtitles": True,
-        "format":"bestvideo+bestaudio/best",
+        "format":"bestaudio+bestvideo",
         "subtitleslangs": ['all', '-live_chat'],
         "postprocessors":[
             {"key": "FFmpegEmbedSubtitle"},
