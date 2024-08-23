@@ -1,5 +1,6 @@
 import os
 import time
+import urllib
 
 from downloader import ytdlp_download_video, ytdlp_download_playlist_metadata
 from dbconnection import Database
@@ -25,14 +26,14 @@ class Library:
     def get_all_filesystem_videos(self) -> list[VideoID]:
         start = time.perf_counter_ns()
         videos_list = []
-        dir0list = [x for x in os.scandir(f"{self.media_dir}") if x.is_dir()]
+        dir0list = [x for x in os.scandir(f"{self.media_dir}") if x.is_dir() and x.name != "thumbs"]
         for dir0idx, dir0item in enumerate(dir0list):
             dir1list = [x for x in os.scandir(dir0item) if x.is_dir()]
             for dir1item in dir1list:
                 dir2list = [
                     VideoID(x.name[:-4]) for x in
                     os.scandir(dir1item)
-                    if not x.is_dir() and x.name[-4:]=='.mkv'
+                    if not x.is_dir() and x.name[-4:]=='.mkv' and x.name[0] != "."
                 ]
                 videos_list += dir2list
             print(
@@ -42,6 +43,54 @@ class Library:
         end = time.perf_counter_ns()
         print(f"\nEnumerated {len(videos_list)} videos in {(end-start)/1_000_000_000:.2f} seconds")
         return videos_list
+
+    def download_thumbnail(self, video: VideoID) -> None:
+        fileloc = f"{video.foldername(f"{self.media_dir}/thumbs")}/{video}.jpg"
+        if os.path.isfile(fileloc):
+            return
+        os.makedirs(video.foldername(f"{self.media_dir}/thumbs"), exist_ok=True)
+        try:
+            urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/maxresdefault.jpg", fileloc)
+            return
+        except urllib.error.HTTPError:
+            pass
+
+        try:
+            urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/sddefault.jpg", fileloc)
+            print(f"{video} only had SD thumbnail")
+            return
+        except urllib.error.HTTPError:
+            try:
+                # Don't ask my why SD Default is higher quality than HQ default
+                urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/hqdefault.jpg", fileloc)
+                print(f"{video} only had SD thumbnail")
+                return
+            except urllib.error.HTTPError:
+                pass
+
+        
+        try:
+            urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/mqdefault.jpg", fileloc)
+            print(f"{video} only had LQ thumbnail")
+            return
+        except urllib.error.HTTPError:
+            pass
+            
+        try:
+            urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/mqdefault.jpg", fileloc)
+            print(f"{video} only had basic thumbnail")
+            return
+        except urllib.error.HTTPError:
+            pass
+        
+        print(f"[ERROR] {video} has no thumbnails!")
+
+    def update_thumbnails(self) -> None: 
+        all_videos = self.get_all_filesystem_videos()
+        for i,video in enumerate(all_videos):
+            self.download_thumbnail(video)
+            print(f"Updating thumbnails: {i+1} / {len(all_videos)}\r",end='')
+        print("\nFinished")
 
     def create_playlist_m3u8(self, pid: PlaylistID | None, invert: bool = False) -> str:
         if pid is None:
@@ -133,6 +182,7 @@ class Library:
     def download_video(self, vid: VideoID, add_tag: bool = True) -> None:
         db_entry = self.db.get_video_info(vid)
         if db_entry is None:
+            self.download_thumbnail(vid)
             video_metadata = ytdlp_download_video(self.media_dir, vid, self.max_video_resolution)
             if video_metadata is not None:
                 if (
