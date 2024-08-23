@@ -1,35 +1,14 @@
 import os
 import shutil
 import subprocess
-import re
-from typing import Any, Union
+from typing import Any
 
 from argparse import ArgumentParser
 
 from library import Library
 from datatypes import VideoID, PlaylistID, ChannelID, TagID
 from datatypes import VideoMetadata, PlaylistMetadata, convert_file_size
-
-def infer_type(url: str) -> Union[VideoID,PlaylistID,ChannelID]:
-    re_match = re.match(
-        r"(?:https?:\/\/)?(?:www.)?youtube.com(?:\.[a-z]+)?\/"
-        r"(?:watch\?v=|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)",
-        url
-    )
-    value = re_match.groups()[0] if re_match else url
-    try:
-        return ChannelID(value)
-    except ValueError:
-        pass
-    try:
-        return PlaylistID(value)
-    except ValueError:
-        pass
-    try:
-        return VideoID(value)
-    except ValueError:
-        pass
-    raise ValueError(f"Unable to determine the format of {value}")
+from datatypes import infer_type
 
 def get_item_fzf(items: list[str]) -> str | None:
     with subprocess.Popen(
@@ -213,8 +192,9 @@ def parse_command(
             print(f"Total removed size: {convert_file_size(lib.purge())}")
         case 'size-v':
             video_sizes = []
-            for vid in [x.id for x in lib.get_all_single_videos()]:
-                if len(lib.db.get_video_playlists(vid)) == 0:
+            for vid in [x.id for x in lib.get_all_videos()]:
+                is_single_video = len([x for x in lib.db.get_video_tags(vid) if x != 0]) <= 1
+                if is_single_video and len(lib.db.get_video_playlists(vid)) == 0:
                     try:
                         video_sizes.append((vid,os.path.getsize(fname(vid))))
                     except FileNotFoundError:
@@ -225,7 +205,7 @@ def parse_command(
         case 'size-p':
             playlists = [x.id for x in lib.get_all_playlists()]
             playlist_sizes = []
-            for idx1, pid in enumerate(playlists):
+            for idx, pid in enumerate(playlists):
                 size = 0
                 for vid in [x.id for x in lib.get_playlist_videos(pid)]:
                     video_tags = len(lib.db.get_video_tags(vid))
@@ -236,7 +216,7 @@ def parse_command(
                         except FileNotFoundError:
                             print(f"ERROR: Missing file: {vid.filename()}")
                 playlist_sizes.append((pid,size))
-                print(f"Enumerating... ({idx1+1}/{len(playlists)})",end="\r")
+                print(f"Enumerating... ({idx+1}/{len(playlists)})",end="\r")
             print()
 
             playlist_sizes.sort(key=lambda x: -x[1])

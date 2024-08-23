@@ -116,11 +116,6 @@ class Library:
             return self.db.get_videos([self.db.get_tnumid(tag)])
         return self.db.get_videos([])
 
-    def get_all_single_videos(self, tag: TagID | None = None) -> list[VideoMetadata]:
-        if tag:
-            return self.db.get_videos([zero_tag,self.db.get_tnumid(tag)])
-        return self.db.get_videos([zero_tag])
-
     def get_all_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadata]:
         return self.db.get_videos_from_channel(cid)
 
