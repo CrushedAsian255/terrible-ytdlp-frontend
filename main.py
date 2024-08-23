@@ -96,15 +96,21 @@ def pick_content_fzf(
         case _:
             raise SystemError("what")
 
-def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool, tag: TagID | None) -> None:
+def parse_command(
+    lib: Library,
+    command: str,
+    url: str | None,
+    auxiliary: bool,
+    tag: TagID | None
+) -> None:
     def fname(vid: VideoID) -> str:
         return vid.filename(lib.media_dir)
     content_id = None
     match command:
         case 'download':
-            if not len(params):
+            if not url:
                 print("Error: No URL given")
-            content_id = infer_type(params[0])
+            content_id = infer_type(url)
             match content_id:
                 case VideoID():
                     lib.download_video(content_id)
@@ -122,15 +128,15 @@ def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool
             if tag is None:
                 print("Error: A tag is required (pass with -t <tag>)")
                 return
-            lib.db.create_tag(tag,(params[0] if len(params) else ""))
+            lib.db.create_tag(tag,(url or ""))
         case 'tag-item':
             if tag is None:
                 print("Error: A tag is required (pass with -t <tag>)")
                 return
-            if not len(params):
+            if not url:
                 print("Error: No URL given")
                 return
-            content_id = infer_type(params[1])
+            content_id = infer_type(url)
             match content_id:
                 case VideoID():
                     lib.add_tag_to_video(tag,content_id)
@@ -140,7 +146,7 @@ def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool
                     print("Error: Cannot tag channel")
         case 'play':
             try:
-                content_id = infer_type(params[0])
+                content_id = infer_type(url)
                 if isinstance(content_id,ChannelID):
                     content_id = pick_content_fzf(
                         lib.get_all_videos_from_channel(content_id),
@@ -158,7 +164,7 @@ def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool
                     open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
         case 'play-v':
             try:
-                content_id = infer_type(params[0])
+                content_id = infer_type(url)
                 if isinstance(content_id,PlaylistID):
                     raise NotImplementedError("Not implemented")
                 if isinstance(content_id,ChannelID):
@@ -172,11 +178,11 @@ def parse_command(lib: Library, command: str, params: list[str], auxiliary: bool
                     open_mpv(fname(content_id))
         case 'play-pl':
             try:
-                content_id = infer_type(params[0])
+                content_id = infer_type(url)
                 if isinstance(content_id,VideoID):
                     raise NotImplementedError("Not implemented")
                 if isinstance(content_id,ChannelID):
-                    content_id = pick_playlist_fzf(lib.get_all_playlists(content_id))
+                    content_id = pick_playlist_fzf(lib.get_all_playlists_from_channel(content_id))
             except (ValueError, IndexError):
                 content_id = pick_playlist_fzf(lib.get_all_playlists(tag))
             open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
@@ -278,7 +284,7 @@ def main() -> None:
         dest="tag"
     )
     arg_parser.add_argument("command", help="Command")
-    arg_parser.add_argument("params",  help="Parameters", nargs='*')
+    arg_parser.add_argument("url",  help="URL", nargs='?')
     args = arg_parser.parse_args()
 
     bpath = os.path.expanduser("~/YouTube")
@@ -326,8 +332,8 @@ def main() -> None:
     tag: TagID | None = None
     if args.tag:
         tag = TagID(args.tag)
-    
-    parse_command(library, args.command, args.params, args.auxiliary, tag)
+
+    parse_command(library, args.command, args.url, args.auxiliary, tag)
     library.exit()
 
     try:

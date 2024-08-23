@@ -46,7 +46,12 @@ class PlaylistID:
     def __init__(self, value: str | None) -> None:
         if value is None:
             raise ValueError("Value does not exist")
-        if re.match(r"^(videos|streams|shorts)@.*|PL[a-zA-Z0-9_-]{32}|PL[a-zA-Z0-9_-]{16}|FL[a-zA-Z0-9_-]{22}$",value) is None:
+        if re.match(
+            r"^(videos|streams|shorts)@.*|"
+            r"PL[a-zA-Z0-9_-]{32}|"
+            r"PL[a-zA-Z0-9_-]{16}|"
+            r"FL[a-zA-Z0-9_-]{22}$"
+        ,value) is None:
             raise ValueError(f"Error: Invalid PlaylistID {value}")
         self.value = value
 

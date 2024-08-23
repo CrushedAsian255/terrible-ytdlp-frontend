@@ -54,7 +54,6 @@ class Library:
             return
         except urllib.error.HTTPError:
             pass
-
         try:
             urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/sddefault.jpg", fileloc)
             print(f"{video} only had SD thumbnail")
@@ -67,25 +66,21 @@ class Library:
                 return
             except urllib.error.HTTPError:
                 pass
-
-        
         try:
             urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/mqdefault.jpg", fileloc)
             print(f"{video} only had LQ thumbnail")
             return
         except urllib.error.HTTPError:
             pass
-            
         try:
             urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/mqdefault.jpg", fileloc)
             print(f"{video} only had basic thumbnail")
             return
         except urllib.error.HTTPError:
             pass
-        
         print(f"[ERROR] {video} has no thumbnails!")
 
-    def update_thumbnails(self) -> None: 
+    def update_thumbnails(self) -> None:
         all_videos = self.get_all_filesystem_videos()
         for i,video in enumerate(all_videos):
             self.download_thumbnail(video)
