@@ -6,7 +6,7 @@ from typing import Any
 from argparse import ArgumentParser
 
 from library import Library
-from datatypes import VideoID, PlaylistID, ChannelID, TagID
+from datatypes import VideoID, PlaylistID, ChannelID, TagID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, convert_file_size
 from datatypes import infer_type
 
@@ -89,6 +89,7 @@ def parse_command(
         case 'download':
             if not url:
                 print("Error: No URL given")
+                return
             content_id = infer_type(url)
             match content_id:
                 case VideoID():
@@ -124,14 +125,14 @@ def parse_command(
                 case ChannelID():
                     print("Error: Cannot tag channel")
         case 'play':
-            try:
+            if url:
                 content_id = infer_type(url)
                 if isinstance(content_id,ChannelID):
                     content_id = pick_content_fzf(
                         lib.get_all_videos_from_channel(content_id),
                         lib.get_all_playlists_from_channel(content_id)
                     )
-            except (ValueError, IndexError):
+            else:
                 content_id = pick_content_fzf(
                     lib.get_all_videos(tag),
                     lib.get_all_playlists(tag)
@@ -142,13 +143,13 @@ def parse_command(
                 case PlaylistID():
                     open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
         case 'play-v':
-            try:
+            if url:
                 content_id = infer_type(url)
                 if isinstance(content_id,PlaylistID):
                     raise NotImplementedError("Not implemented")
                 if isinstance(content_id,ChannelID):
                     content_id = pick_video_fzf(lib.get_all_videos_from_channel(content_id))
-            except (ValueError, IndexError):
+            else:
                 content_id = pick_video_fzf(lib.get_all_videos(tag))
             if content_id is not None:
                 if auxiliary:
@@ -156,13 +157,13 @@ def parse_command(
                 else:
                     open_mpv(fname(content_id))
         case 'play-pl':
-            try:
+            if url:
                 content_id = infer_type(url)
                 if isinstance(content_id,VideoID):
                     raise NotImplementedError("Not implemented")
                 if isinstance(content_id,ChannelID):
                     content_id = pick_playlist_fzf(lib.get_all_playlists_from_channel(content_id))
-            except (ValueError, IndexError):
+            else:
                 content_id = pick_playlist_fzf(lib.get_all_playlists(tag))
             open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
         case 'check':
@@ -193,7 +194,9 @@ def parse_command(
         case 'size-v':
             video_sizes = []
             for vid in [x.id for x in lib.get_all_videos()]:
-                is_single_video = len([x for x in lib.db.get_video_tags(vid) if x != 0]) <= 1
+                is_single_video = len([
+                    x for x in lib.db.get_video_tags(vid) if x != TagNumID(0)
+                ]) <= 1
                 if is_single_video and len(lib.db.get_video_playlists(vid)) == 0:
                     try:
                         video_sizes.append((vid,os.path.getsize(fname(vid))))
