@@ -1,11 +1,13 @@
 import os
 import time
-import urllib
+import urllib.request
+import urllib.error
 
 from downloader import ytdlp_download_video, ytdlp_download_playlist_metadata
 from dbconnection import Database
 from datatypes import VideoID, PlaylistID, ChannelID, TagID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata
+from datatypes import convert_file_size
 
 zero_tag = TagNumID(0)
 
@@ -16,8 +18,6 @@ class Library:
     ):
         self.media_dir = media_dir
         self.db = Database(db_filename,print_db_log)
-        self.closed = False
-        self.online = True
         self.max_video_resolution = max_resolution
 
     def exit(self) -> None:
@@ -99,22 +99,28 @@ class Library:
             m3ustring+=f"#EXTINF:{item.duration},{item.title}\n{item.id.filename(self.media_dir)}\n"
         return m3ustring
 
-    def add_tag_to_video(self, tag: TagID, vid: VideoID) -> None:
-        self.db.add_tag_to_video(
-            self.db.get_tnumid(tag),
-            self.db.get_vnumid(vid)
-        )
-
-    def add_tag_to_playlist(self, tag: TagID, pid: PlaylistID) -> None:
-        self.db.add_tag_to_playlist(
-            self.db.get_tnumid(tag),
-            self.db.get_pnumid(pid)
-        )
+    def add_tag(self, tag: TagID, content_id: VideoID | PlaylistID) -> None:
+        match content_id:
+            case VideoID():
+                self.db.add_tag_to_video(
+                    self.db.get_tnumid(tag),
+                    self.db.get_vnumid(content_id)
+                )
+            case PlaylistID():
+                self.db.add_tag_to_playlist(
+                    self.db.get_tnumid(tag),
+                    self.db.get_pnumid(content_id)
+                )
 
     def get_all_videos(self, tag: TagID | None = None) -> list[VideoMetadata]:
         if tag:
             return self.db.get_videos([self.db.get_tnumid(tag)])
         return self.db.get_videos([])
+
+    def get_all_playlists(self, tag: TagID | None = None) -> list[PlaylistMetadata[int]]:
+        if tag:
+            return self.db.get_playlists([self.db.get_tnumid(tag)])
+        return self.db.get_playlists([])
 
     def get_all_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadata]:
         return self.db.get_videos_from_channel(cid)
@@ -127,11 +133,6 @@ class Library:
         if info is None:
             return []
         return info.entries
-
-    def get_all_playlists(self, tag: TagID | None = None) -> list[PlaylistMetadata[int]]:
-        if tag:
-            return self.db.get_playlists([self.db.get_tnumid(tag)])
-        return self.db.get_playlists([])
 
     def download_channel(self, cid: ChannelID, get_playlists: bool = False) -> None:
         self.download_playlist(PlaylistID(f"videos{cid}"))
@@ -228,6 +229,7 @@ class Library:
                 description=data['description'],
                 epoch=data['epoch']
             ))
+
     def prune(self) -> None:
         for db_vid in [x.id for x in self.get_all_videos()]:
             video_tags = len(self.db.get_video_tags(db_vid))
@@ -235,6 +237,7 @@ class Library:
             if video_tags == 0 and video_playlists == 0:
                 print(f"Removing orphaned video: {db_vid}")
                 self.db.remove_video(db_vid)
+
     def purge(self) -> int:
         videos_database = [x.id for x in self.get_all_videos()]
         total_size = 0
@@ -245,3 +248,25 @@ class Library:
                 total_size += size
                 os.remove(fname)
         return total_size
+
+    def integrity_check(self) -> None:
+        videos_filesystem: list[VideoID] = self.get_all_filesystem_videos()
+        videos_database: list[VideoID] = [x.id for x in self.get_all_videos()]
+        total_size = 0
+        for vid in videos_filesystem:
+            if vid not in videos_database:
+                size = os.path.getsize(vid.filename(self.media_dir))
+                total_size += size
+                print(f"Orphaned file: {vid.filename()} | {convert_file_size(size)}")
+        print(f"Total orphaned file size: {convert_file_size(total_size)}")
+        total_size = 0
+        for vid in videos_database:
+            if vid not in videos_filesystem:
+                print(f"ERROR: Missing file: {vid.fileloc}")
+            video_tags = len(self.db.get_video_tags(vid))
+            video_playlists = len(self.db.get_video_playlists(vid))
+            if video_tags == 0 and video_playlists == 0:
+                size = os.path.getsize(vid.filename(self.media_dir))
+                total_size += size
+                print(f"Orphaned video: {vid} | {convert_file_size(size)}")
+        print(f"Total orphaned video size: {convert_file_size(total_size)}")

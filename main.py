@@ -95,13 +95,13 @@ def parse_command(
                 case VideoID():
                     lib.download_video(content_id)
                     if tag:
-                        lib.add_tag_to_video(tag,content_id)
+                        lib.add_tag(tag,content_id)
                     if auxiliary:
                         open_mpv(fname(content_id))
                 case PlaylistID():
                     lib.download_playlist(content_id)
                     if tag:
-                        lib.add_tag_to_playlist(tag,content_id)
+                        lib.add_tag(tag,content_id)
                 case ChannelID():
                     lib.download_channel(content_id,not auxiliary)
         case 'new-tag':
@@ -109,19 +109,20 @@ def parse_command(
                 print("Error: A tag is required (pass with -t <tag>)")
                 return
             lib.db.create_tag(tag,(url or ""))
-        case 'tag-item':
-            if tag is None:
+        case 'tag':
+            if not tag:
                 print("Error: A tag is required (pass with -t <tag>)")
                 return
-            if not url:
-                print("Error: No URL given")
-                return
-            content_id = infer_type(url)
+            if url:
+                content_id = infer_type(url)
+            else:
+                content_id = pick_content_fzf(
+                    lib.get_all_videos(),
+                    lib.get_all_playlists()
+                )
             match content_id:
-                case VideoID():
-                    lib.add_tag_to_video(tag,content_id)
-                case PlaylistID():
-                    lib.add_tag_to_playlist(tag,content_id)
+                case VideoID() | PlaylistID():
+                    lib.add_tag(tag,content_id)
                 case ChannelID():
                     print("Error: Cannot tag channel")
         case 'play':
@@ -167,26 +168,7 @@ def parse_command(
                 content_id = pick_playlist_fzf(lib.get_all_playlists(tag))
             open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
         case 'check':
-            videos_filesystem: list[VideoID] = lib.get_all_filesystem_videos()
-            videos_database: list[VideoID] = [x.id for x in lib.get_all_videos()]
-            total_size = 0
-            for vid in videos_filesystem:
-                if vid not in videos_database:
-                    size = os.path.getsize(fname(vid))
-                    total_size += size
-                    print(f"Orphaned file: {vid.filename()} | {convert_file_size(size)}")
-            print(f"Total orphaned file size: {convert_file_size(total_size)}")
-            total_size = 0
-            for vid in videos_database:
-                if vid not in videos_filesystem:
-                    print(f"ERROR: Missing file: {vid.fileloc}")
-                video_tags = len(lib.db.get_video_tags(vid))
-                video_playlists = len(lib.db.get_video_playlists(vid))
-                if video_tags == 0 and video_playlists == 0:
-                    size = os.path.getsize(fname(vid))
-                    total_size += size
-                    print(f"Orphaned video: {vid} | {convert_file_size(size)}")
-            print(f"Total orphaned video size: {convert_file_size(total_size)}")
+            lib.integrity_check()
         case 'prune':
             lib.prune()
         case 'purge':
@@ -206,7 +188,7 @@ def parse_command(
             for vid, size in video_sizes[10:0:-1]:
                 print(f"{vid} | {convert_file_size(size)}")
         case 'size-p':
-            playlists = [x.id for x in lib.get_all_playlists()]
+            playlists: list[PlaylistID] = [x.id for x in lib.get_all_playlists()]
             playlist_sizes = []
             for idx, pid in enumerate(playlists):
                 size = 0
@@ -295,6 +277,9 @@ def main() -> None:
             f.write(media_dir)
 
     os.makedirs(media_dir, exist_ok=True)
+
+    try_copy(f"{lib_db}.bak", f"{lib_db}.bak2")
+    try_copy(lib_db, f"{lib_db}.bak")
 
     try:
         library = Library(lib_db,media_dir,args.max_resolution,args.print_db_log)
