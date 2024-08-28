@@ -6,7 +6,7 @@ import sys
 
 from datatypes import VideoID, PlaylistID, ChannelID, TagID
 from datatypes import VideoNumID, PlaylistNumID, ChannelNumID, TagNumID
-from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata, Tag
+from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata, TagMetadata
 
 class Database:
     def exec(self, sql: str, params: tuple[Any, ...] | None = None) -> list[tuple[Any, ...]]:
@@ -381,11 +381,11 @@ class Database:
             return None
         return TagNumID(output[0][0])
 
-    def get_tag_info(self, tid: TagID) -> Tag | None:
+    def get_tag_info(self, tid: TagID) -> TagMetadata | None:
         output = self.exec("SELECT num_id,id,long_name FROM Tag WHERE id=?",(tid,))
         if len(output) == 0:
             return None
-        return Tag(
+        return TagMetadata(
             num_id=TagNumID(output[0][0]),
             id=TagID(output[0][1]),
             long_name=output[0][2]
