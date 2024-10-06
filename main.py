@@ -108,7 +108,7 @@ def parse_command(
             if tag is None:
                 print("Error: A tag is required (pass with -t <tag>)")
                 return
-            lib.db.create_tag(tag,(url or ""))
+            lib.create_tag(tag,(url or ""))
         case 'tag':
             if not tag:
                 print("Error: A tag is required (pass with -t <tag>)")
@@ -174,17 +174,7 @@ def parse_command(
         case 'purge':
             print(f"Total removed size: {convert_file_size(lib.purge())}")
         case 'size-v':
-            video_sizes = []
-            for vid in [x.id for x in lib.get_all_videos()]:
-                is_single_video = len([
-                    x for x in lib.db.get_video_tags(vid) if x != TagNumID(0)
-                ]) <= 1
-                if is_single_video and len(lib.db.get_video_playlists(vid)) == 0:
-                    try:
-                        video_sizes.append((vid,os.path.getsize(fname(vid))))
-                    except FileNotFoundError:
-                        print(f"ERROR: Missing file: {vid.fileloc}")
-            video_sizes.sort(key=lambda x: -x[1])
+            video_sizes = lib.get_largest_videos()
             for vid, size in video_sizes[10:0:-1]:
                 print(f"{vid} | {convert_file_size(size)}")
         case 'size-p':

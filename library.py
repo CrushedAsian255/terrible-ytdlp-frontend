@@ -99,6 +99,9 @@ class Library:
             m3ustring+=f"#EXTINF:{item.duration},{item.title}\n{item.id.filename(self.media_dir)}\n"
         return m3ustring
 
+    def create_tag(self, tag: TagID, description: str) -> None:
+        self.db.create_tag(tag,description)
+
     def add_tag(self, tag: TagID, content_id: VideoID | PlaylistID) -> None:
         match content_id:
             case VideoID():
@@ -270,3 +273,17 @@ class Library:
                 total_size += size
                 print(f"Orphaned video: {vid} | {convert_file_size(size)}")
         print(f"Total orphaned video size: {convert_file_size(total_size)}")
+
+    def get_largest_videos(self) -> None:
+        video_sizes = []
+        for vid in [x.id for x in self.get_all_videos()]:
+            is_single_video = len([
+                x for x in self.db.get_video_tags(vid) if x != TagNumID(0)
+            ]) <= 1
+            if is_single_video and len(self.db.get_video_playlists(vid)) == 0:
+                try:
+                    video_sizes.append((vid,os.path.getsize(vid.filename(self.media_dir))))
+                except FileNotFoundError:
+                    print(f"ERROR: Missing file: {vid.fileloc}")
+        video_sizes.sort(key=lambda x: -x[1])
+        return video_sizes
