@@ -223,7 +223,7 @@ class TagMetadata:
 def infer_type(url: str) -> typing.Union[VideoID,PlaylistID,ChannelID]:
     re_match = re.match(
         r"(?:https?:\/\/)?(?:www.)?youtube.com(?:\.[a-z]+)?\/"
-        r"(?:watch\?v=|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)",
+        r"(?:watch\?v=|shorts\/|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)",
         url
     )
     value = re_match.groups()[0] if re_match else url
