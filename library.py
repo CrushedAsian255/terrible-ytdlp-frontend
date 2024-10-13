@@ -5,7 +5,8 @@ import urllib.error
 
 from downloader import ytdlp_download_video, ytdlp_download_playlist_metadata
 from dbconnection import Database
-from datatypes import VideoID, PlaylistID, ChannelID, TagID, TagNumID
+from datatypes import VideoID, PlaylistID
+from datatypes import ChannelHandle, ChannelUUID, TagID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata
 from datatypes import convert_file_size
 
@@ -125,10 +126,10 @@ class Library:
             return self.db.get_playlists([self.db.get_tnumid(tag)])
         return self.db.get_playlists([])
 
-    def get_all_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadata]:
+    def get_all_videos_from_channel(self, cid: ChannelUUID) -> list[VideoMetadata]:
         return self.db.get_videos_from_channel(cid)
 
-    def get_all_playlists_from_channel(self, cid: ChannelID) -> list[PlaylistMetadata[int]]:
+    def get_all_playlists_from_channel(self, cid: ChannelUUID) -> list[PlaylistMetadata[int]]:
         return self.db.get_playlists_from_channel(cid)
 
     def get_playlist_videos(self, pid: PlaylistID) -> list[VideoMetadata]:
@@ -137,10 +138,16 @@ class Library:
             return []
         return info.entries
 
-    def download_channel(self, cid: ChannelID, get_playlists: bool = False) -> None:
-        self.download_playlist(PlaylistID(f"videos{cid}"))
-        self.download_playlist(PlaylistID(f"shorts{cid}"))
-        self.download_playlist(PlaylistID(f"streams{cid}"))
+    def convert_handle_to_uuid(self, cid: ChannelUUID | ChannelHandle) -> ChannelUUID:
+        match cid:
+            case ChannelUUID(): return cid
+            case ChannelHandle(): raise NotImplementedError()
+
+    def download_channel(self, cid_: ChannelUUID | ChannelHandle, get_playlists: bool = False) -> None:
+        cid = self.convert_handle_to_uuid(cid_)
+        self.download_playlist(PlaylistID(f"${cid}.videos"))
+        self.download_playlist(PlaylistID(f"${cid}.shorts"))
+        self.download_playlist(PlaylistID(f"${cid}.streams"))
 
         if get_playlists:
             playlists = ytdlp_download_playlist_metadata(cid.playlists_url)
@@ -152,7 +159,7 @@ class Library:
         playlist_metadata = ytdlp_download_playlist_metadata(pid.url)
         if playlist_metadata is None:
             return
-        self.save_channel_info(ChannelID(playlist_metadata['uploader_id']))
+        self.save_channel_info(ChannelUUID(playlist_metadata['channel_id']))
         videos_ = [VideoID(x['id']) for x in playlist_metadata['entries']]
         videos = []
         for x in videos_:
@@ -165,7 +172,8 @@ class Library:
                 id=pid,
                 title=playlist_metadata['title'],
                 description=playlist_metadata['description'],
-                channel=playlist_metadata['uploader_id'],
+                channel_handle=ChannelHandle(playlist_metadata['uploader_id']),
+                channel_id=ChannelUUID(playlist_metadata['channel_id']),
                 channel_name=playlist_metadata['channel'],
                 epoch=playlist_metadata['epoch'],
                 entries=[v for v in videos if self.db.get_video_info(v)]
@@ -179,36 +187,13 @@ class Library:
             self.download_thumbnail(vid)
             video_metadata = ytdlp_download_video(self.media_dir, vid, self.max_video_resolution)
             if video_metadata is not None:
-                if (
-                    not isinstance(video_metadata['uploader_id'],str)
-                    or len(video_metadata['uploader_id']) == 0
-                    or video_metadata['uploader_id'][0]   != "@"
-                ):
-                    if (
-                        'channel_id' in video_metadata
-                        and isinstance(video_metadata['channel_id'],str)
-                        and video_metadata['channel_id'][0]=='U'
-                    ):
-                        print("Returned channel UUID instead of handle, resolving...")
-                        data = ytdlp_download_playlist_metadata(
-                            f"https://youtube.com/channel/{video_metadata['channel_id']}",True
-                        )
-                        if data is None or 'uploader_id' not in data:
-                            raise IOError(
-                                f"Fatal error: attempted to resolve channel UUID"
-                                f"{video_metadata['channel_id']} failed"
-                            )
-                        video_metadata['uploader_id'] = data['uploader_id']
-                    else:
-                        raise IOError(
-                            "Fatal error: no handle or Channel UUID returned, cannot continue"
-                        )
-                self.save_channel_info(ChannelID(video_metadata['uploader_id']))
+                self.save_channel_info(ChannelUUID(video_metadata['channel_id']))
                 self.db.write_video_info(VideoMetadata(
                     id=vid,
                     title=video_metadata['title'],
                     description=video_metadata['description'],
-                    channel=ChannelID(video_metadata['uploader_id']),
+                    channel_id=ChannelUUID(video_metadata['channel_id']),
+                    channel_handle=ChannelHandle(video_metadata['uploader_id']),
                     channel_name=video_metadata['channel'],
                     upload_date=video_metadata['upload_date'],
                     duration=video_metadata['duration'],
@@ -217,9 +202,9 @@ class Library:
                 if add_tag:
                     self.db.add_tag_to_video(zero_tag, self.db.get_vnumid(vid))
         else:
-            self.save_channel_info(db_entry.channel)
+            self.save_channel_info(db_entry.channel_id)
 
-    def save_channel_info(self, cid: ChannelID) -> None:
+    def save_channel_info(self, cid: ChannelUUID) -> None:
         db_entry = self.db.get_channel_info(cid)
         if db_entry is None:
             print(f"Downloading channel metadata: {cid}")
@@ -228,6 +213,7 @@ class Library:
                 raise IOError(f"Error: unable to get channel info from {cid}")
             self.db.write_channel_info(ChannelMetadata(
                 id=cid,
+                handle=data['uploader_id'],
                 title=data['channel'],
                 description=data['description'],
                 epoch=data['epoch']
@@ -274,7 +260,7 @@ class Library:
                 print(f"Orphaned video: {vid} | {convert_file_size(size)}")
         print(f"Total orphaned video size: {convert_file_size(total_size)}")
 
-    def get_largest_videos(self) -> None:
+    def get_largest_videos(self) -> list[tuple[VideoID,int]]:
         video_sizes = []
         for vid in [x.id for x in self.get_all_videos()]:
             is_single_video = len([

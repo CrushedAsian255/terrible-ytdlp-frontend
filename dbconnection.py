@@ -4,7 +4,7 @@ import time
 from typing import Any, cast
 import sys
 
-from datatypes import VideoID, PlaylistID, ChannelID, TagID
+from datatypes import VideoID, PlaylistID, ChannelUUID, TagID, ChannelHandle
 from datatypes import VideoNumID, PlaylistNumID, ChannelNumID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata, TagMetadata
 
@@ -19,7 +19,7 @@ class Database:
                     new_params.append(param)
                 case VideoNumID() | PlaylistNumID() | ChannelNumID() | TagNumID():
                     new_params.append(int(param))
-                case VideoID() | PlaylistID() | ChannelID() | TagID():
+                case VideoID() | PlaylistID() | ChannelHandle() | ChannelUUID() | TagID():
                     new_params.append(str(param))
                 case None:
                     new_params.append(None)
@@ -64,6 +64,7 @@ class Database:
         self.exec('''CREATE TABLE IF NOT EXISTS Channel (
             num_id INTEGER PRIMARY KEY,
             id TEXT NOT NULL UNIQUE,
+            handle TEXT NOT NULL UNIQUE,
 
             title TEXT NOT NULL,
             description TEXT NOT NULL,
@@ -155,7 +156,7 @@ class Database:
         data = self.exec('''
         SELECT
             Video.id,Video.title,Video.description,Video.upload_date,
-            Video.duration,Video.epoch,Channel.id,Channel.title
+            Video.duration,Video.epoch,Channel.handle,Channel.id,Channel.title
         FROM Video
         INNER JOIN Channel ON Video.channel_id=Channel.num_id
         WHERE Video.id=?
@@ -169,7 +170,8 @@ class Database:
             upload_date=int(data[0][3]),
             duration=int(data[0][4]),
             epoch=data[0][5],
-            channel=ChannelID(data[0][6]),
+            channel_handle=ChannelHandle(data[0][6]),
+            channel_id=ChannelUUID(data[0][6]),
             channel_name=data[0][7]
         )
     def write_video_info(self, video: VideoMetadata) -> VideoNumID:
@@ -185,7 +187,7 @@ class Database:
             int(video.upload_date),
             int(video.duration),
             int(video.epoch),
-            video.channel
+            video.channel_id
         ))
         self.connection.commit()
         return cast(VideoNumID,db_out[0][0])
@@ -194,7 +196,7 @@ class Database:
         data = self.exec('''
         SELECT
             Playlist.id, Playlist.title, Playlist.description, Playlist.epoch,
-            Channel.id, Playlist.num_id, Channel.title
+            Channel.id, Channel.title, Channel.handle
         FROM Playlist
         INNER JOIN Channel ON Playlist.channel_id=Channel.num_id
         WHERE Playlist.id=?
@@ -205,7 +207,6 @@ class Database:
             id=PlaylistID(data[0][0]),
             title=data[0][1],
             description=data[0][2],
-            channel=ChannelID(data[0][4]),
             epoch=int(data[0][3]),
             entries=[VideoMetadata(
                 id=VideoID(x[0]),
@@ -214,20 +215,23 @@ class Database:
                 upload_date=int(x[3]),
                 duration=int(x[4]),
                 epoch=int(x[5]),
-                channel=ChannelID(x[6]),
+                channel_id=ChannelUUID(x[6]),
+                channel_handle=ChannelHandle(x[8]),
                 channel_name=x[7]
             ) for x in self.exec('''
                 SELECT
                     Video.id, Video.title, Video.description,
                     Video.upload_date, Video.duration, Video.epoch,
-                    Channel.id,Channel.title
+                    Channel.id,Channel.title,Channel.handle
                 FROM Video
                 RIGHT JOIN Pointer ON Video.num_id=Pointer.video_id
                 INNER JOIN Channel ON Video.channel_id=Channel.num_id
                 WHERE Pointer.playlist_id=?
                 ORDER BY Pointer.position ASC
             ''',(data[0][5],))],
-            channel_name=data[0][6]
+            channel_name=data[0][5],
+            channel_id=ChannelUUID(data[0][4]),
+            channel_handle=ChannelHandle(data[0][6])
         )
     def write_playlist_info(self, playlist: PlaylistMetadata[list[VideoID]]) -> PlaylistNumID:
         db_out = self.exec(
@@ -235,7 +239,7 @@ class Database:
             VALUES (?,?,?,?,?,(SELECT num_id FROM Channel WHERE id=?)) RETURNING (num_id)''',
             (
                 playlist.id, playlist.title, playlist.description, int(playlist.epoch),
-                playlist.entry_count, playlist.channel
+                playlist.entry_count, playlist.channel_id
             )
         )
         pnumid = self.exec("SELECT num_id FROM Playlist WHERE id=?",(playlist.id,))[0][0]
@@ -248,25 +252,26 @@ class Database:
         self.connection.commit()
         return PlaylistNumID(db_out[0][0])
 
-    def get_channel_info(self, cid: ChannelID) -> ChannelMetadata | None:
+    def get_channel_info(self, cid: ChannelUUID) -> ChannelMetadata | None:
         data = self.exec('''
         SELECT
-            id, title, description, epoch
+            id, handle, title, description, epoch
         FROM Channel
         WHERE id=?
         ''',(cid,))
         if len(data) == 0:
             return None
         return ChannelMetadata(
-            id=ChannelID(data[0][0]),
-            title=data[0][1],
-            description=data[0][2],
-            epoch=int(data[0][3])
+            id=ChannelUUID(data[0][0]),
+            handle=ChannelHandle(data[0][1]),
+            title=data[0][2],
+            description=data[0][3],
+            epoch=int(data[0][4])
         )
     def write_channel_info(self, channel: ChannelMetadata) -> None:
         self.exec(
-            "INSERT OR REPLACE INTO Channel(id,title,description,epoch) VALUES (?,?,?,?)",
-            (channel.id, channel.title, channel.description, int(channel.epoch))
+            "INSERT OR REPLACE INTO Channel(id,handle,title,description,epoch) VALUES (?,?,?,?,?)",
+            (channel.id, channel.handle, channel.title, channel.description, int(channel.epoch))
         )
         self.connection.commit()
 
@@ -278,12 +283,13 @@ class Database:
             upload_date=int(data[3]),
             duration=int(data[4]),
             epoch=data[5],
-            channel=ChannelID(data[6]),
+            channel_id=ChannelUUID(data[6]),
+            channel_handle=ChannelHandle(data[8]),
             channel_name=data[7]
         ) for data in self.exec(f'''
             SELECT
                 Video.id, Video.title, Video.description, Video.upload_date,
-                Video.duration, Video.epoch, Channel.id, Channel.title
+                Video.duration, Video.epoch, Channel.id, Channel.title, Channel.handle
             FROM Video
             INNER JOIN Channel ON Video.channel_id=Channel.num_id
             {f'''JOIN (
@@ -300,13 +306,15 @@ class Database:
             title=playlist[1],
             description=playlist[2],
             epoch=int(playlist[4]),
-            channel=ChannelID(playlist[5]),
+            channel_id=ChannelUUID(playlist[5]),
             entries=int(playlist[3]),
-            channel_name=playlist[6]
+            channel_name=playlist[6],
+            channel_handle=ChannelHandle(playlist[7])
         ) for playlist in self.exec(f'''
             SELECT
                 Playlist.id, Playlist.title, Playlist.description,
-                Playlist.count, Playlist.epoch, Channel.id, Channel.title
+                Playlist.count, Playlist.epoch,
+                Channel.id, Channel.title, Channel.handle
             FROM Playlist
             WHERE Playlist.count > 0
             INNER JOIN Channel ON Playlist.channel_id=Channel.num_id
@@ -328,7 +336,7 @@ class Database:
             )
         ]
 
-    def get_videos_from_channel(self, cid: ChannelID) -> list[VideoMetadata]:
+    def get_videos_from_channel(self, cid: ChannelUUID) -> list[VideoMetadata]:
         return [VideoMetadata(
             id=VideoID(data[0]),
             title=data[1],
@@ -336,29 +344,33 @@ class Database:
             upload_date=int(data[3]),
             duration=int(data[4]),
             epoch=data[5],
-            channel=ChannelID(data[6]),
+            channel_id=ChannelUUID(data[6]),
+            channel_handle=ChannelHandle(data[8]),
             channel_name=data[7]
         ) for data in self.exec('''
             SELECT
-                Video.id, Video.title, Video.description, Video.upload_date,
-                Video.duration, Video.epoch, Channel.id, Channel.title
+                Video.id, Video.title, Video.description,
+                Video.upload_date, Video.duration, Video.epoch,
+                Channel.id, Channel.title, Channel.handle
             FROM Video
             INNER JOIN Channel ON Video.channel_id=Channel.num_id
             WHERE Video.channel_id=(SELECT num_id FROM Channel WHERE id=?)
         ''',(cid,))]
-    def get_playlists_from_channel(self, cid: ChannelID) -> list[PlaylistMetadata[int]]:
+    def get_playlists_from_channel(self, cid: ChannelUUID) -> list[PlaylistMetadata[int]]:
         return [PlaylistMetadata[int](
             id=PlaylistID(playlist[0]),
             title=playlist[1],
             description=playlist[2],
             epoch=int(playlist[4]),
-            channel=ChannelID(playlist[5]),
+            channel_id=ChannelUUID(playlist[5]),
+            channel_handle=ChannelHandle(playlist[7]),
             entries=int(playlist[3]),
             channel_name=playlist[6]
         ) for playlist in self.exec('''
             SELECT
                 Playlist.id, Playlist.title, Playlist.description,
-                Playlist.count, Playlist.epoch, Channel.id, Channel.title
+                Playlist.count, Playlist.epoch,
+                Channel.id, Channel.title, Channel.handle
             FROM Playlist
             WHERE Playlist.count > 0
             INNER JOIN Channel ON Playlist.channel_id=Channel.num_id

@@ -35,10 +35,10 @@ class PlaylistID:
     __slots__ = ('value',)
     @property
     def url(self) -> str:
-        value = self.value.split("@")
-        if len(value) == 1:
-            return f"https://www.youtube.com/playlist?list={value[0]}"
-        return f"https://www.youtube.com/@{value[1]}/{value[0]}"
+        if self.value[0] == "$":
+            v = self.value[1:].split(".")
+            return f"https://www.youtube.com/channel/{v[0]}/{v[1]}"
+        return f"https://www.youtube.com/playlist?list={self.value}"
     def __str__(self) -> str:
         return self.value
     def __repr__(self) -> str:
@@ -47,7 +47,7 @@ class PlaylistID:
         if value is None:
             raise ValueError("Value does not exist")
         if re.match(
-            r"^(videos|streams|shorts)@.*|"
+            r"^\$UC{a-zA-Z0-9_-}{22}\.(videos|streams|shorts)|"
             r"PL[a-zA-Z0-9_-]{32}|"
             r"PL[a-zA-Z0-9_-]{16}|"
             r"FL[a-zA-Z0-9_-]{22}$"
@@ -55,26 +55,20 @@ class PlaylistID:
             raise ValueError(f"Error: Invalid PlaylistID {value}")
         self.value = value
 
-class ChannelID:
+class ChannelHandle:
     __slots__ = ('value',)
     @property
     def url(self) -> str:
         return f"https://www.youtube.com/{self.value}"
-    @property
-    def playlists_url(self) -> str:
-        return f"https://www.youtube.com/{self.value}/playlists"
-    @property
-    def about_url(self) -> str:
-        return f"https://www.youtube.com/{self.value}/about"
     def __str__(self) -> str:
         return self.value
     def __repr__(self) -> str:
-        return f"ChannelID<{self.value}>"
+        return f"ChannelHandle<{self.value}>"
     def __init__(self, value: str | None) -> None:
         if value is None:
             raise ValueError("Value does not exist")
         if re.match(r"^@.*$",value) is None:
-            raise ValueError(f"Error: Invalid ChannelID {value}")
+            raise ValueError(f"Error: Invalid ChannelHandle {value}")
         self.value = value
 
 class TagID:
@@ -92,6 +86,12 @@ class TagID:
 
 class ChannelUUID:
     __slots__ = ('value',)
+    @property
+    def playlists_url(self) -> str:
+        return f"https://www.youtube.com/channel/{self.value}/playlists"
+    @property
+    def about_url(self) -> str:
+        return f"https://www.youtube.com/channel/{self.value}/about"
     @property
     def url(self) -> str:
         return f"https://www.youtube.com/channel/{self.value}"
@@ -168,7 +168,7 @@ class VideoMetadata:
         return (
             f"{self.id} | "
             f"{convert_duration(self.duration)} | "
-            f"{self.channel_name} ({self.channel}): "
+            f"{self.channel_name} ({self.channel_handle}): "
             f"{self.title}"
         )
 
@@ -178,7 +178,8 @@ class VideoMetadata:
     upload_date: int
     duration: int
     epoch: int
-    channel: ChannelID
+    channel_id: ChannelUUID
+    channel_handle: ChannelHandle
     channel_name: str
 
 PlaylistEntriesT=typing.TypeVar('PlaylistEntriesT')
@@ -195,21 +196,23 @@ class PlaylistMetadata(typing.Generic[PlaylistEntriesT]):
         return (
             f"{self.id} | "
             f"{self.entry_count} video{"s" if self.entry_count > 1 else ""} | "
-            f"{self.channel_name} ({self.channel}): "
+            f"{self.channel_name} ({self.channel_handle}): "
             f"{self.title}"
         )
 
     id: PlaylistID
     title: str
     description: str
-    channel: ChannelID
-    epoch: int
+    channel_id: ChannelUUID
+    channel_handle: ChannelHandle
     channel_name: str
+    epoch: int
     entries: PlaylistEntriesT
 
 @dataclass(slots=True)
 class ChannelMetadata:
-    id: ChannelID
+    id: ChannelUUID
+    handle: ChannelHandle
     title: str
     description: str
     epoch: int
@@ -220,7 +223,7 @@ class TagMetadata:
     id: TagID
     long_name: str
 
-def infer_type(url: str) -> typing.Union[VideoID,PlaylistID,ChannelID]:
+def infer_type(url: str) -> typing.Union[VideoID,PlaylistID,ChannelUUID,ChannelHandle]:
     re_match = re.match(
         r"(?:https?:\/\/)?(?:www.)?youtube.com(?:\.[a-z]+)?\/"
         r"(?:watch\?v=|shorts\/|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)",
@@ -228,7 +231,7 @@ def infer_type(url: str) -> typing.Union[VideoID,PlaylistID,ChannelID]:
     )
     value = re_match.groups()[0] if re_match else url
     try:
-        return ChannelID(value)
+        return ChannelHandle(value)
     except ValueError:
         pass
     try:
@@ -237,6 +240,10 @@ def infer_type(url: str) -> typing.Union[VideoID,PlaylistID,ChannelID]:
         pass
     try:
         return VideoID(value)
+    except ValueError:
+        pass
+    try:
+        return ChannelUUID(value)
     except ValueError:
         pass
     raise ValueError(f"Unable to determine the format of {value}")

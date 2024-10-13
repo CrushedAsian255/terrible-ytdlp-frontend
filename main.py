@@ -6,7 +6,8 @@ from typing import Any
 from argparse import ArgumentParser
 
 from library import Library
-from datatypes import VideoID, PlaylistID, ChannelID, TagID, TagNumID
+from datatypes import VideoID, PlaylistID
+from datatypes import ChannelHandle, ChannelUUID, TagID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, convert_file_size
 from datatypes import infer_type
 
@@ -102,7 +103,7 @@ def parse_command(
                     lib.download_playlist(content_id)
                     if tag:
                         lib.add_tag(tag,content_id)
-                case ChannelID():
+                case x:
                     lib.download_channel(content_id,not auxiliary)
         case 'new-tag':
             if tag is None:
@@ -123,12 +124,14 @@ def parse_command(
             match content_id:
                 case VideoID() | PlaylistID():
                     lib.add_tag(tag,content_id)
-                case ChannelID():
+                case ChannelHandle() | ChannelUUID():
                     print("Error: Cannot tag channel")
         case 'play':
             if url:
                 content_id = infer_type(url)
-                if isinstance(content_id,ChannelID):
+                if isinstance(content_id,ChannelHandle):
+                    content_id = lib.convert_handle_to_uuid(content_id)
+                if isinstance(content_id,ChannelUUID):
                     content_id = pick_content_fzf(
                         lib.get_all_videos_from_channel(content_id),
                         lib.get_all_playlists_from_channel(content_id)
@@ -146,9 +149,11 @@ def parse_command(
         case 'play-v':
             if url:
                 content_id = infer_type(url)
+                if isinstance(content_id,ChannelHandle):
+                    content_id = lib.convert_handle_to_uuid(content_id)
                 if isinstance(content_id,PlaylistID):
                     raise NotImplementedError("Not implemented")
-                if isinstance(content_id,ChannelID):
+                if isinstance(content_id,ChannelUUID):
                     content_id = pick_video_fzf(lib.get_all_videos_from_channel(content_id))
             else:
                 content_id = pick_video_fzf(lib.get_all_videos(tag))
@@ -160,9 +165,11 @@ def parse_command(
         case 'play-pl':
             if url:
                 content_id = infer_type(url)
+                if isinstance(content_id,ChannelHandle):
+                    content_id = lib.convert_handle_to_uuid(content_id)
                 if isinstance(content_id,VideoID):
                     raise NotImplementedError("Not implemented")
-                if isinstance(content_id,ChannelID):
+                if isinstance(content_id,ChannelUUID):
                     content_id = pick_playlist_fzf(lib.get_all_playlists_from_channel(content_id))
             else:
                 content_id = pick_playlist_fzf(lib.get_all_playlists(tag))
