@@ -308,6 +308,7 @@ class Database:
                 Playlist.id, Playlist.title, Playlist.description,
                 Playlist.count, Playlist.epoch, Channel.id, Channel.title
             FROM Playlist
+            WHERE Playlist.count > 0
             INNER JOIN Channel ON Playlist.channel_id=Channel.num_id
             {f'''JOIN (
                 SELECT playlist_id
@@ -359,6 +360,7 @@ class Database:
                 Playlist.id, Playlist.title, Playlist.description,
                 Playlist.count, Playlist.epoch, Channel.id, Channel.title
             FROM Playlist
+            WHERE Playlist.count > 0
             INNER JOIN Channel ON Playlist.channel_id=Channel.num_id
             WHERE Playlist.channel_id=(SELECT num_id FROM Channel WHERE id=?)
         ''',(cid,))]
