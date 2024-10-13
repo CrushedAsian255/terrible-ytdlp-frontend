@@ -47,7 +47,7 @@ class PlaylistID:
         if value is None:
             raise ValueError("Value does not exist")
         if re.match(
-            r"^\$UC{a-zA-Z0-9_-}{22}\.(videos|streams|shorts)|"
+            r"^\$UC[a-zA-Z0-9_-]{22}\.(videos|streams|shorts)|"
             r"PL[a-zA-Z0-9_-]{32}|"
             r"PL[a-zA-Z0-9_-]{16}|"
             r"FL[a-zA-Z0-9_-]{22}$"
@@ -60,6 +60,9 @@ class ChannelHandle:
     @property
     def url(self) -> str:
         return f"https://www.youtube.com/{self.value}"
+    @property
+    def about_url(self) -> str:
+        return f"https://www.youtube.com/{self.value}/about"
     def __str__(self) -> str:
         return self.value
     def __repr__(self) -> str:
@@ -100,7 +103,7 @@ class ChannelUUID:
     def __repr__(self) -> str:
         return f"ChannelUUID<{self.value}>"
     def __init__(self, value: str) -> None:
-        if re.match(r"^@UC[a-zA-Z0-9_-]{22}$",value) is None:
+        if re.match(r"^UC[a-zA-Z0-9_-]{22}$",value) is None:
             raise ValueError(f"Error: Invalid ChannelUUID {value}")
         self.value = value
 

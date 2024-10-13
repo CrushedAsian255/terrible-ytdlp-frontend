@@ -141,7 +141,23 @@ class Library:
     def convert_handle_to_uuid(self, cid: ChannelUUID | ChannelHandle) -> ChannelUUID:
         match cid:
             case ChannelUUID(): return cid
-            case ChannelHandle(): raise NotImplementedError()
+            case ChannelHandle():
+                db_entry = None#self.db.get_channel_info(cid)
+                if db_entry is None:
+                    print(f"Downloading channel metadata from handle {cid}")
+                    data = ytdlp_download_playlist_metadata(f"{cid.about_url}",True)
+                    if data is None:
+                        raise IOError(f"Error: unable to get channel info from {cid}")
+                    if data['uploader_id'] != cid.value:
+                        raise IOError(f"Error: Got data about channel {data['uploader_id']} instead of {cid}")
+                    self.db.write_channel_info(ChannelMetadata(
+                        id=data['channel_id'],
+                        handle=data['uploader_id'],
+                        title=data['channel'],
+                        description=data['description'],
+                        epoch=data['epoch']
+                    ))
+                    return ChannelUUID(data['channel_id'])
 
     def download_channel(self, cid_: ChannelUUID | ChannelHandle, get_playlists: bool = False) -> None:
         cid = self.convert_handle_to_uuid(cid_)
@@ -211,8 +227,10 @@ class Library:
             data = ytdlp_download_playlist_metadata(cid.about_url,True)
             if data is None:
                 raise IOError(f"Error: unable to get channel info from {cid}")
+            if data['channel_id'] != cid.value:
+                raise IOError(f"Error: Got data about channel {data['channel_id']} instead of {cid}")
             self.db.write_channel_info(ChannelMetadata(
-                id=cid,
+                id=data['channel_id'],
                 handle=data['uploader_id'],
                 title=data['channel'],
                 description=data['description'],

@@ -171,8 +171,8 @@ class Database:
             duration=int(data[0][4]),
             epoch=data[0][5],
             channel_handle=ChannelHandle(data[0][6]),
-            channel_id=ChannelUUID(data[0][6]),
-            channel_name=data[0][7]
+            channel_id=ChannelUUID(data[0][7]),
+            channel_name=data[0][8]
         )
     def write_video_info(self, video: VideoMetadata) -> VideoNumID:
         db_out = self.exec('''

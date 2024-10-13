@@ -50,12 +50,12 @@ def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None) -> 
     if info is None or info["is_live"] is True:
         return None
 
+    if os.path.isfile(dest_file):
+        return info
+
     src_file = f"/tmp/video_dl_{vid}.mkv"
     src_size = os.stat(src_file).st_size
     os.makedirs(vid.foldername(media_path),exist_ok=True)
-
-    if os.path.isfile(dest_file) and src_size == os.stat(dest_file).st_size:
-        return info
 
     with open(src_file, "rb") as src:
         with open(f"{dest_file}.tmp", "wb") as dest:
