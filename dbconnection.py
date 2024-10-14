@@ -68,7 +68,8 @@ class Database:
 
             title TEXT NOT NULL,
             description TEXT NOT NULL,
-            epoch INTEGER NOT NULL
+            epoch INTEGER NOT NULL,
+            removed INTEGER NOT NULL DEFAULT 0
         ) STRICT''')
         self.exec("CREATE INDEX IF NOT EXISTS idx_channel_id ON Channel(id)")
 
@@ -83,6 +84,7 @@ class Database:
             epoch INTEGER NOT NULL,
             
             channel_id INTEGER NOT NULL,
+            removed INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (channel_id) REFERENCES Channel(num_id)      
         ) STRICT''')
         self.exec("CREATE INDEX IF NOT EXISTS idx_video_id ON Video(id)")
@@ -100,6 +102,7 @@ class Database:
             epoch INTEGER NOT NULL,
 
             channel_id INTEGER NOT NULL,
+            removed INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (channel_id) REFERENCES Channel(num_id)
         ) STRICT''')
         self.exec("CREATE INDEX IF NOT EXISTS idx_playlist_id ON Playlist(id)")
@@ -252,22 +255,40 @@ class Database:
         self.connection.commit()
         return PlaylistNumID(db_out[0][0])
 
-    def get_channel_info(self, cid: ChannelUUID) -> ChannelMetadata | None:
-        data = self.exec('''
-        SELECT
-            id, handle, title, description, epoch
-        FROM Channel
-        WHERE id=?
-        ''',(cid,))
-        if len(data) == 0:
-            return None
-        return ChannelMetadata(
-            id=ChannelUUID(data[0][0]),
-            handle=ChannelHandle(data[0][1]),
-            title=data[0][2],
-            description=data[0][3],
-            epoch=int(data[0][4])
-        )
+    def get_channel_info(self, cid: ChannelUUID | ChannelHandle) -> ChannelMetadata | None:
+        match cid:
+            case ChannelUUID():
+                data = self.exec('''
+                SELECT
+                    id, handle, title, description, epoch
+                FROM Channel
+                WHERE id=?
+                ''',(cid,))
+                if len(data) == 0:
+                    return None
+                return ChannelMetadata(
+                    id=ChannelUUID(data[0][0]),
+                    handle=ChannelHandle(data[0][1]),
+                    title=data[0][2],
+                    description=data[0][3],
+                    epoch=int(data[0][4])
+                )
+            case ChannelHandle():
+                data = self.exec('''
+                SELECT
+                    id, handle, title, description, epoch
+                FROM Channel
+                WHERE handle=?
+                ''',(cid,))
+                if len(data) == 0:
+                    return None
+                return ChannelMetadata(
+                    id=ChannelUUID(data[0][0]),
+                    handle=ChannelHandle(data[0][1]),
+                    title=data[0][2],
+                    description=data[0][3],
+                    epoch=int(data[0][4])
+                )
     def write_channel_info(self, channel: ChannelMetadata) -> None:
         self.exec(
             "INSERT OR REPLACE INTO Channel(id,handle,title,description,epoch) VALUES (?,?,?,?,?)",

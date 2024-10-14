@@ -142,22 +142,23 @@ class Library:
         match cid:
             case ChannelUUID(): return cid
             case ChannelHandle():
-                db_entry = None#self.db.get_channel_info(cid)
-                if db_entry is None:
-                    print(f"Downloading channel metadata from handle {cid}")
-                    data = ytdlp_download_playlist_metadata(f"{cid.about_url}",True)
-                    if data is None:
-                        raise IOError(f"Error: unable to get channel info from {cid}")
-                    if data['uploader_id'] != cid.value:
-                        raise IOError(f"Error: Got data about channel {data['uploader_id']} instead of {cid}")
-                    self.db.write_channel_info(ChannelMetadata(
-                        id=data['channel_id'],
-                        handle=data['uploader_id'],
-                        title=data['channel'],
-                        description=data['description'],
-                        epoch=data['epoch']
-                    ))
-                    return ChannelUUID(data['channel_id'])
+                db_entry = self.db.get_channel_info(cid)
+                if db_entry is not None:
+                    return db_entry
+                print(f"Downloading channel metadata from handle {cid}")
+                data = ytdlp_download_playlist_metadata(f"{cid.about_url}",True)
+                if data is None:
+                    raise IOError(f"Error: unable to get channel info from {cid}")
+                if data['uploader_id'] != cid.value:
+                    raise IOError(f"Error: Got data about channel {data['uploader_id']} instead of {cid}")
+                self.db.write_channel_info(ChannelMetadata(
+                    id=data['channel_id'],
+                    handle=data['uploader_id'],
+                    title=data['channel'],
+                    description=data['description'],
+                    epoch=data['epoch']
+                ))
+                return ChannelUUID(data['channel_id'])
 
     def download_channel(self, cid_: ChannelUUID | ChannelHandle, get_playlists: bool = False) -> None:
         cid = self.convert_handle_to_uuid(cid_)

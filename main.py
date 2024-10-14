@@ -130,7 +130,7 @@ def parse_command(
             if url:
                 content_id = infer_type(url)
                 if isinstance(content_id,ChannelHandle):
-                    content_id = lib.convert_handle_to_uuid(content_id)
+                    content_id = lib.convert_handle_to_uuid(content_id).id
                 if isinstance(content_id,ChannelUUID):
                     content_id = pick_content_fzf(
                         lib.get_all_videos_from_channel(content_id),
@@ -150,7 +150,7 @@ def parse_command(
             if url:
                 content_id = infer_type(url)
                 if isinstance(content_id,ChannelHandle):
-                    content_id = lib.convert_handle_to_uuid(content_id)
+                    content_id = lib.convert_handle_to_uuid(content_id).id
                 if isinstance(content_id,PlaylistID):
                     raise NotImplementedError("Not implemented")
                 if isinstance(content_id,ChannelUUID):
@@ -166,7 +166,7 @@ def parse_command(
             if url:
                 content_id = infer_type(url)
                 if isinstance(content_id,ChannelHandle):
-                    content_id = lib.convert_handle_to_uuid(content_id)
+                    content_id = lib.convert_handle_to_uuid(content_id).id
                 if isinstance(content_id,VideoID):
                     raise NotImplementedError("Not implemented")
                 if isinstance(content_id,ChannelUUID):
