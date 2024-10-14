@@ -61,6 +61,13 @@ class Database:
         if self.exec("PRAGMA foreign_keys")[0][0] != 1:
             raise OSError("Build of sqlite3 does not support foreign keys")
 
+        self.exec('''CREATE TABLE IF NOT EXISTS Log (
+            ts INTEGER PRIMARY KEY,
+            category TEXT NOT NULL,
+            content TEXT NOT NULL
+        ) STRICT''')
+        self.exec("CREATE INDEX IF NOT EXISTS idx_log_category ON Log(category)")
+
         self.exec('''CREATE TABLE IF NOT EXISTS Channel (
             num_id INTEGER PRIMARY KEY,
             id TEXT NOT NULL UNIQUE,
@@ -154,6 +161,11 @@ class Database:
         self.exec("INSERT OR IGNORE INTO Tag(num_id,id,description) VALUES (?,?,?)",(0,'',None))
 
         self.connection.commit()
+
+    def write_log(self, category: str, contents: str) -> None:
+        self.exec('''
+            INSERT INTO Log(ts,category,content) VALUES (?,?,?)
+        ''',(int(time.time()*1000000), category, contents))
 
     def get_video_info(self, vid: VideoID) -> VideoMetadata | None:
         data = self.exec('''
