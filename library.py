@@ -24,6 +24,9 @@ class Library:
     def exit(self) -> None:
         self.db.exit()
 
+    def write_log(self, category: str, contents: str) -> None:
+        self.db.write_log(category,contents)
+
     def get_all_filesystem_videos(self) -> list[VideoID]:
         start = time.perf_counter_ns()
         videos_list = []

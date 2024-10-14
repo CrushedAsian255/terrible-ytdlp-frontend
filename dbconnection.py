@@ -166,6 +166,7 @@ class Database:
         self.exec('''
             INSERT INTO Log(ts,category,content) VALUES (?,?,?)
         ''',(int(time.time()*1000000), category, contents))
+        self.connection.commit()
 
     def get_video_info(self, vid: VideoID) -> VideoMetadata | None:
         data = self.exec('''

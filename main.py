@@ -86,6 +86,7 @@ def parse_command(
     def fname(vid: VideoID) -> str:
         return vid.filename(lib.media_dir)
     content_id = None
+    lib.write_log("command",f"{command} {url}")
     match command:
         case 'download':
             if not url:
