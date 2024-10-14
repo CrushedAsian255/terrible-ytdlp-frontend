@@ -76,7 +76,8 @@ class Database:
             title TEXT NOT NULL,
             description TEXT NOT NULL,
             epoch INTEGER NOT NULL,
-            removed INTEGER NOT NULL DEFAULT 0
+            removed INTEGER NOT NULL DEFAULT 0,
+            aux_data TEXT
         ) STRICT''')
         self.exec("CREATE INDEX IF NOT EXISTS idx_channel_id ON Channel(id)")
 
@@ -92,6 +93,7 @@ class Database:
             
             channel_id INTEGER NOT NULL,
             removed INTEGER NOT NULL DEFAULT 0,
+            aux_data TEXT,
             FOREIGN KEY (channel_id) REFERENCES Channel(num_id)      
         ) STRICT''')
         self.exec("CREATE INDEX IF NOT EXISTS idx_video_id ON Video(id)")
@@ -110,6 +112,7 @@ class Database:
 
             channel_id INTEGER NOT NULL,
             removed INTEGER NOT NULL DEFAULT 0,
+            aux_data TEXT,
             FOREIGN KEY (channel_id) REFERENCES Channel(num_id)
         ) STRICT''')
         self.exec("CREATE INDEX IF NOT EXISTS idx_playlist_id ON Playlist(id)")
@@ -131,7 +134,8 @@ class Database:
         self.exec('''CREATE TABLE IF NOT EXISTS Tag (
             num_id INTEGER PRIMARY KEY,
             id TEXT NOT NULL UNIQUE,
-            description TEXT
+            description TEXT,
+            aux_data TEXT
         ) STRICT''')
 
         self.exec('''CREATE TABLE IF NOT EXISTS TaggedVideo (
