@@ -111,6 +111,7 @@ class Database:
             epoch INTEGER NOT NULL,
 
             channel_id INTEGER NOT NULL,
+            following INTEGER NOT NULL DEFAULT 0,
             removed INTEGER NOT NULL DEFAULT 0,
             aux_data TEXT,
             FOREIGN KEY (channel_id) REFERENCES Channel(num_id)
@@ -216,7 +217,7 @@ class Database:
         data = self.exec('''
         SELECT
             Playlist.id, Playlist.title, Playlist.description, Playlist.epoch,
-            Channel.id, Channel.title, Channel.handle
+            Channel.id, Channel.title, Channel.handle, Playlist.num_id
         FROM Playlist
         INNER JOIN Channel ON Playlist.channel_id=Channel.num_id
         WHERE Playlist.id=?
@@ -248,7 +249,7 @@ class Database:
                 INNER JOIN Channel ON Video.channel_id=Channel.num_id
                 WHERE Pointer.playlist_id=?
                 ORDER BY Pointer.position ASC
-            ''',(data[0][5],))],
+            ''',(data[0][7],))],
             channel_name=data[0][5],
             channel_id=ChannelUUID(data[0][4]),
             channel_handle=ChannelHandle(data[0][6])
