@@ -147,7 +147,7 @@ class Library:
             case ChannelHandle():
                 db_entry = self.db.get_channel_info(cid)
                 if db_entry is not None:
-                    return db_entry
+                    return db_entry.id
                 print(f"Downloading channel metadata from handle {cid}")
                 data = ytdlp_download_playlist_metadata(f"{cid.about_url}",True)
                 if data is None:
