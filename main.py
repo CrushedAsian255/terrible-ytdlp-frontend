@@ -261,16 +261,18 @@ def main() -> None:
         args.library = f"{args.library}.{args.max_resolution}"
     lib_db = args.database_path if args.database_path else f"{bpath}/{args.library}.db"
     try_copy(f"{lib_db}.bak", f"{lib_db}.bak2")
-    media_dir: str = args.media_dir if args.media_dir else f"{bpath}/{args.library}"
-
+    media_dir: str = f"{bpath}/{args.library}"
+    using_custom_dir = False
     try:
         with open(f"{bpath}/{args.library}","r",encoding="utf-8") as f:
             media_dir = f.read()
+            using_custom_dir = True
     except (FileNotFoundError, IsADirectoryError):
         pass
 
     if args.media_dir:
         media_dir = args.media_dir
+        using_custom_dir = True
         with open(f"{bpath}/{args.library}","w",encoding="utf-8") as f:
             f.write(media_dir)
 
@@ -306,6 +308,10 @@ def main() -> None:
         os.remove(f"{lib_db}.bak2")
     except FileNotFoundError:
         pass
+
+    if using_custom_dir:
+        print("Writing database...")
+        shutil.copy(lib_db, f"{media_dir}.db")
 
 if __name__ == "__main__":
     main()
