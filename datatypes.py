@@ -178,7 +178,7 @@ class VideoMetadata:
     id: VideoID
     title: str
     description: str
-    upload_date: int
+    upload_timestamp: int
     duration: int
     epoch: int
     channel_id: ChannelUUID

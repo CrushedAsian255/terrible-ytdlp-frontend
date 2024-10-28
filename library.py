@@ -215,7 +215,7 @@ class Library:
                     channel_id=ChannelUUID(video_metadata['channel_id']),
                     channel_handle=ChannelHandle(video_metadata['uploader_id']),
                     channel_name=video_metadata['channel'],
-                    upload_date=video_metadata['upload_date'],
+                    upload_timestamp=video_metadata['timestamp'],
                     duration=video_metadata['duration'],
                     epoch=video_metadata['epoch'],
                 ))

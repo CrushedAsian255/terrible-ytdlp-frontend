@@ -87,7 +87,7 @@ class Database:
 
             title TEXT NOT NULL,
             description TEXT NOT NULL,
-            upload_date INTEGER NOT NULL,
+            upload_timestamp INTEGER NOT NULL,
             duration INTEGER NOT NULL,
             epoch INTEGER NOT NULL,
             
@@ -176,7 +176,7 @@ class Database:
     def get_video_info(self, vid: VideoID) -> VideoMetadata | None:
         data = self.exec('''
         SELECT
-            Video.id,Video.title,Video.description,Video.upload_date,
+            Video.id,Video.title,Video.description,Video.upload_timestamp,
             Video.duration,Video.epoch,Channel.handle,Channel.id,Channel.title
         FROM Video
         INNER JOIN Channel ON Video.channel_id=Channel.num_id
@@ -188,7 +188,7 @@ class Database:
             id=VideoID(data[0][0]),
             title=data[0][1],
             description=data[0][2],
-            upload_date=int(data[0][3]),
+            upload_timestamp=int(data[0][3]),
             duration=int(data[0][4]),
             epoch=data[0][5],
             channel_handle=ChannelHandle(data[0][6]),
@@ -197,7 +197,7 @@ class Database:
         )
     def write_video_info(self, video: VideoMetadata) -> VideoNumID:
         db_out = self.exec('''
-        INSERT OR REPLACE INTO Video(id,title,description,upload_date,duration,epoch,channel_id)
+        INSERT OR REPLACE INTO Video(id,title,description,upload_timestamp,duration,epoch,channel_id)
         VALUES (
             ?,?,?,?,?,?,
             (SELECT num_id FROM Channel WHERE id=?)
@@ -205,7 +205,7 @@ class Database:
         ''',(video.id,
             video.title,
             video.description,
-            int(video.upload_date),
+            int(video.upload_timestamp),
             int(video.duration),
             int(video.epoch),
             video.channel_id
@@ -233,7 +233,7 @@ class Database:
                 id=VideoID(x[0]),
                 title=x[1],
                 description=x[2],
-                upload_date=int(x[3]),
+                upload_timestamp=int(x[3]),
                 duration=int(x[4]),
                 epoch=int(x[5]),
                 channel_id=ChannelUUID(x[6]),
@@ -242,7 +242,7 @@ class Database:
             ) for x in self.exec('''
                 SELECT
                     Video.id, Video.title, Video.description,
-                    Video.upload_date, Video.duration, Video.epoch,
+                    Video.upload_timestamp, Video.duration, Video.epoch,
                     Channel.id,Channel.title,Channel.handle
                 FROM Video
                 RIGHT JOIN Pointer ON Video.num_id=Pointer.video_id
@@ -319,7 +319,7 @@ class Database:
             id=VideoID(data[0]),
             title=data[1],
             description=data[2],
-            upload_date=int(data[3]),
+            upload_timestamp=int(data[3]),
             duration=int(data[4]),
             epoch=data[5],
             channel_id=ChannelUUID(data[6]),
@@ -327,7 +327,7 @@ class Database:
             channel_name=data[7]
         ) for data in self.exec(f'''
             SELECT
-                Video.id, Video.title, Video.description, Video.upload_date,
+                Video.id, Video.title, Video.description, Video.upload_timestamp,
                 Video.duration, Video.epoch, Channel.id, Channel.title, Channel.handle
             FROM Video
             INNER JOIN Channel ON Video.channel_id=Channel.num_id
@@ -379,7 +379,7 @@ class Database:
             id=VideoID(data[0]),
             title=data[1],
             description=data[2],
-            upload_date=int(data[3]),
+            upload_timestamp=int(data[3]),
             duration=int(data[4]),
             epoch=data[5],
             channel_id=ChannelUUID(data[6]),
@@ -388,7 +388,7 @@ class Database:
         ) for data in self.exec('''
             SELECT
                 Video.id, Video.title, Video.description,
-                Video.upload_date, Video.duration, Video.epoch,
+                Video.upload_timestamp, Video.duration, Video.epoch,
                 Channel.id, Channel.title, Channel.handle
             FROM Video
             INNER JOIN Channel ON Video.channel_id=Channel.num_id
