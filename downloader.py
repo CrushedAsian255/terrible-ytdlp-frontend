@@ -42,6 +42,7 @@ def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None) -> 
             }
         ],
         "format_sort":[
+            "acodec:opus",
             f"res{f":{max_res}" if max_res is not None else ""}"
         ]
     })
