@@ -225,28 +225,3 @@ class TagMetadata:
     num_id: TagNumID
     id: TagID
     long_name: str
-
-def infer_type(url: str) -> typing.Union[VideoID,PlaylistID,ChannelUUID,ChannelHandle]:
-    re_match = re.match(
-        r"(?:https?:\/\/)?(?:www.)?youtube(?:education)?.com(?:\.[a-z]+)?\/"
-        r"(?:watch\?v=|shorts\/|playlist\?list=|(?=@))(@?[0-9a-zA-Z-_]+)",
-        url
-    )
-    value = re_match.groups()[0] if re_match else url
-    try:
-        return ChannelHandle(value)
-    except ValueError:
-        pass
-    try:
-        return PlaylistID(value)
-    except ValueError:
-        pass
-    try:
-        return VideoID(value)
-    except ValueError:
-        pass
-    try:
-        return ChannelUUID(value)
-    except ValueError:
-        pass
-    raise ValueError(f"Unable to determine the format of {value}")

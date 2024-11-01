@@ -15,11 +15,13 @@ zero_tag = TagNumID(0)
 class Library:
     def __init__(
         self, db_filename: str, media_dir: str,
-        max_resolution: int | None, print_db_log: bool
+        max_resolution: int | None, print_db_log: bool,
+        login_data_path: str | None
     ):
         self.media_dir = media_dir
         self.db = Database(db_filename,print_db_log)
         self.max_video_resolution = max_resolution
+        self.login_data_path = login_data_path
 
     def exit(self) -> None:
         self.db.exit()
@@ -205,7 +207,11 @@ class Library:
         db_entry = self.db.get_video_info(vid)
         if db_entry is None:
             self.download_thumbnail(vid)
-            video_metadata = ytdlp_download_video(self.media_dir, vid, self.max_video_resolution)
+            video_metadata = ytdlp_download_video(self.media_dir, vid, self.max_video_resolution, None)
+            if video_metadata is None and self.login_data_path:
+                print("Attempting logged in")
+                video_metadata = ytdlp_download_video(self.media_dir, vid, self.max_video_resolution, self.login_data_path)
+
             if video_metadata is not None:
                 self.save_channel_info(ChannelUUID(video_metadata['channel_id']))
                 self.db.write_video_info(VideoMetadata(

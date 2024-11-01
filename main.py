@@ -1,15 +1,15 @@
 import os
 import shutil
 import subprocess
-from typing import Any
+from typing import Any, Union
 
 from argparse import ArgumentParser
 
+import re
 from library import Library
 from datatypes import VideoID, PlaylistID
 from datatypes import ChannelHandle, ChannelUUID, TagID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, convert_file_size
-from datatypes import infer_type
 
 def get_item_fzf(items: list[str]) -> str | None:
     with subprocess.Popen(
@@ -67,14 +67,15 @@ def pick_content_fzf(
     )
     if x is None:
         return None
-    out = infer_type(x)
-    match out:
-        case VideoID() | PlaylistID():
-            return out
-        case None:
-            return None
-        case _:
-            raise SystemError("what")
+    try:
+        return PlaylistID(x)
+    except ValueError:
+        pass
+    try:
+        return VideoID(x)
+    except ValueError:
+        pass
+    raise ValueError(x)
 
 def parse_command(
     lib: Library,
@@ -83,6 +84,37 @@ def parse_command(
     auxiliary: bool,
     tag: TagID | None
 ) -> None:
+    def infer_type(url: str) -> Union[VideoID,PlaylistID,ChannelUUID,ChannelHandle]:
+        re_match = re.match(
+            r"(?:https?:\/\/)?(?:www.)?(?:youtube(?:education)?.com(?:\.[a-z]+)?\/"
+            r"(?:watch\?v=|shorts\/|playlist\?list=|(?=@))|youtu.be\/)(@?[0-9a-zA-Z-_]+)(?:\/(videos|shorts))?",
+            url
+        )
+        print(re_match.groups())
+        value = re_match.groups()[0] if re_match else url
+        try:
+            value = ChannelHandle(value)
+            if re_match and len(re_match.groups()) > 1:
+                handle=lib.convert_handle_to_uuid(value).value
+                print(PlaylistID(f"${handle}.{re_match.groups()[1]}"))
+                return PlaylistID(f"${handle}.{re_match.groups()[1]}")
+            else:
+                return ChannelHandle(value)
+        except ValueError:
+            pass
+        try:
+            return PlaylistID(value)
+        except ValueError:
+            pass
+        try:
+            return VideoID(value)
+        except ValueError:
+            pass
+        try:
+            return ChannelUUID(value)
+        except ValueError:
+            pass
+        raise ValueError(f"Unable to determine the format of {value}")
     def fname(vid: VideoID) -> str:
         return vid.filename(lib.media_dir)
     content_id = None
@@ -131,7 +163,7 @@ def parse_command(
             if url:
                 content_id = infer_type(url)
                 if isinstance(content_id,ChannelHandle):
-                    content_id = lib.convert_handle_to_uuid(content_id).id
+                    content_id = lib.convert_handle_to_uuid(content_id)
                 if isinstance(content_id,ChannelUUID):
                     content_id = pick_content_fzf(
                         lib.get_all_videos_from_channel(content_id),
@@ -151,7 +183,7 @@ def parse_command(
             if url:
                 content_id = infer_type(url)
                 if isinstance(content_id,ChannelHandle):
-                    content_id = lib.convert_handle_to_uuid(content_id).id
+                    content_id = lib.convert_handle_to_uuid(content_id)
                 if isinstance(content_id,PlaylistID):
                     raise NotImplementedError("Not implemented")
                 if isinstance(content_id,ChannelUUID):
@@ -167,7 +199,7 @@ def parse_command(
             if url:
                 content_id = infer_type(url)
                 if isinstance(content_id,ChannelHandle):
-                    content_id = lib.convert_handle_to_uuid(content_id).id
+                    content_id = lib.convert_handle_to_uuid(content_id)
                 if isinstance(content_id,VideoID):
                     raise NotImplementedError("Not implemented")
                 if isinstance(content_id,ChannelUUID):
@@ -260,6 +292,15 @@ def main() -> None:
     if args.max_resolution:
         args.library = f"{args.library}.{args.max_resolution}"
     lib_db = args.database_path if args.database_path else f"{bpath}/{args.library}.db"
+    logged_in_path = ".ytd/master"
+    if logged_in_path:
+        try:
+            with open(f"{logged_in_path}.cjar","r") as _:
+                pass
+            with open(f"{logged_in_path}.pot","r") as _:
+                pass
+        except (FileNotFoundError, IsADirectoryError):
+            logged_in_path = None
     try_copy(f"{lib_db}.bak", f"{lib_db}.bak2")
     media_dir: str = f"{bpath}/{args.library}"
     using_custom_dir = False
@@ -282,7 +323,7 @@ def main() -> None:
     try_copy(lib_db, f"{lib_db}.bak")
 
     try:
-        library = Library(lib_db,media_dir,args.max_resolution,args.print_db_log)
+        library = Library(lib_db,media_dir,args.max_resolution,args.print_db_log,logged_in_path)
     except IOError as e:
         try_copy(f"{lib_db}.bak2", f"{lib_db}.bak")
         print(f"Error loading database!\n{e}\nAttempting to revert to backup")

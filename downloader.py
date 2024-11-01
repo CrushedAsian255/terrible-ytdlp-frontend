@@ -20,8 +20,8 @@ class NoLog:
 
 InfoDict = dict[str,Any]
 
-def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None) -> InfoDict | None:
-    dl = yt_dlp.YoutubeDL({
+def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None, logged_in_path: str | None) -> InfoDict | None:
+    parameters = {
         # "logger": NoLog,
         # "verbose": True,
         "noplaylist": True,
@@ -45,7 +45,29 @@ def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None) -> 
             "acodec:opus",
             f"res{f":{max_res}" if max_res is not None else ""}"
         ]
-    })
+    }
+    if logged_in_path:
+        po_token = None
+        try:
+            with open(f"{logged_in_path}.pot","r",encoding="utf-8") as f:
+                po_token = f.read()
+        except (FileNotFoundError, IsADirectoryError):
+            pass
+        if po_token:
+            parameters.update({
+                "extractor_args": {
+                    "youtube":{
+                        'player-client':'web,default',
+                        'po_token':[f"web+{po_token}"]
+                    }
+                },
+                "cookiefile": f"{logged_in_path}.cjar"
+            })
+            print("Using PO Token")
+        else:
+            print("Invalid PO Token")
+        
+    dl = yt_dlp.YoutubeDL(parameters)
     dest_file = vid.filename(media_path)
     info: InfoDict | None = dl.extract_info(str(vid),download=not os.path.isfile(dest_file))
     if info is None or info["is_live"] is True:
