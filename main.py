@@ -90,16 +90,15 @@ def parse_command(
             r"(?:watch\?v=|shorts\/|playlist\?list=|(?=@))|youtu.be\/)(@?[0-9a-zA-Z-_]+)(?:\/(videos|shorts))?",
             url
         )
-        print(re_match.groups())
         value = re_match.groups()[0] if re_match else url
         try:
-            value = ChannelHandle(value)
-            if re_match and len(re_match.groups()) > 1:
-                handle=lib.convert_handle_to_uuid(value).value
-                print(PlaylistID(f"${handle}.{re_match.groups()[1]}"))
-                return PlaylistID(f"${handle}.{re_match.groups()[1]}")
+            channel_handle = ChannelHandle(value)
+            if re_match and re_match.groups()[1]:
+                uuid=lib.convert_handle_to_uuid(channel_handle).value
+                print(PlaylistID(f"${uuid}.{re_match.groups()[1]}"))
+                return PlaylistID(f"${uuid}.{re_match.groups()[1]}")
             else:
-                return ChannelHandle(value)
+                return channel_handle
         except ValueError:
             pass
         try:
