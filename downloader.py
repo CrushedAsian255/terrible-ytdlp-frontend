@@ -1,9 +1,11 @@
 import os
 from typing import Any, cast
 
+
 import yt_dlp # type: ignore
 
-from datatypes import VideoID, convert_file_size
+from media_filesystem import MediaFilesystem
+from datatypes import VideoID
 
 CONCURRENT_THREADS = 8
 
@@ -20,7 +22,7 @@ class NoLog:
 
 InfoDict = dict[str,Any]
 
-def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None, logged_in_path: str | None) -> InfoDict | None:
+def ytdlp_download_video(media_fs: MediaFilesystem, vid: VideoID, max_res: int | None, logged_in_path: str | None) -> InfoDict | None:
     parameters = {
         # "logger": NoLog,
         # "verbose": True,
@@ -42,7 +44,7 @@ def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None, log
             }
         ],
         "format_sort":[
-            "vcodec:vp9", # TODO: eventually switch to AV1
+            "vcodec:vp9", # Possibly switch to AV1
             "acodec:opus",
             f"res{f":{max_res}" if max_res is not None else ""}"
         ]
@@ -67,38 +69,16 @@ def ytdlp_download_video(media_path: str, vid: VideoID, max_res: int | None, log
             print("Using PO Token")
         else:
             print("Invalid PO Token")
-        
+
     dl = yt_dlp.YoutubeDL(parameters)
-    dest_file = vid.filename(media_path)
-    info: InfoDict | None = dl.extract_info(str(vid),download=not os.path.isfile(dest_file))
+    info: InfoDict | None = dl.extract_info(str(vid),download=not media_fs.video_exists(vid))
     if info is None or info["is_live"] is True:
         return None
 
-    if os.path.isfile(dest_file):
-        return info
-
     src_file = f"/tmp/video_dl_{vid}.mkv"
-    src_size = os.stat(src_file).st_size
-    os.makedirs(vid.foldername(media_path),exist_ok=True)
-
-    with open(src_file, "rb") as src:
-        with open(f"{dest_file}.tmp", "wb") as dest:
-            copied = 0
-            while True:
-                blk = src.read(2**23) # 8mb blocks
-                if not blk:
-                    break
-                dest.write(blk)
-                copied += len(blk)
-                print(
-                    f"Copying file: {convert_file_size(copied)} / {convert_file_size(src_size)}, "
-                    f"{copied*100/src_size:.01f}%",end="\r"
-                )
-    if os.stat(f"{dest_file}.tmp").st_size != src_size:
-        print("\nError: file sizes don't match")
-        return None
-    print(f"\nCopied {convert_file_size(src_size)}")
-    os.rename(f"{dest_file}.tmp", dest_file)
+    if not os.path.isfile(src_file):
+        raise IOError("Error downloading video")
+    media_fs.write_video(vid,src_file)
     os.remove(src_file)
     return info
 

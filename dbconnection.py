@@ -1,3 +1,5 @@
+# pylint: disable=too-many-public-methods
+
 import sqlite3
 import re
 import time

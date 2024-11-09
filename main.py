@@ -8,8 +8,9 @@ from argparse import ArgumentParser
 import re
 from library import Library
 from datatypes import VideoID, PlaylistID
-from datatypes import ChannelHandle, ChannelUUID, TagID, TagNumID
-from datatypes import VideoMetadata, PlaylistMetadata, convert_file_size
+from datatypes import ChannelHandle, ChannelUUID, TagID
+from datatypes import VideoMetadata, PlaylistMetadata
+from media_filesystem import LocalFilesystem
 
 def get_item_fzf(items: list[str]) -> str | None:
     with subprocess.Popen(
@@ -97,8 +98,7 @@ def parse_command(
                 uuid=lib.convert_handle_to_uuid(channel_handle).value
                 print(PlaylistID(f"${uuid}.{re_match.groups()[1]}"))
                 return PlaylistID(f"${uuid}.{re_match.groups()[1]}")
-            else:
-                return channel_handle
+            return channel_handle
         except ValueError:
             pass
         try:
@@ -114,8 +114,6 @@ def parse_command(
         except ValueError:
             pass
         raise ValueError(f"Unable to determine the format of {value}")
-    def fname(vid: VideoID) -> str:
-        return vid.filename(lib.media_dir)
     content_id = None
     lib.write_log("command",f"{command} {url}")
     match command:
@@ -130,12 +128,12 @@ def parse_command(
                     if tag:
                         lib.add_tag(tag,content_id)
                     if auxiliary:
-                        open_mpv(fname(content_id))
+                        open_mpv(lib.media_fs.get_video_url(content_id))
                 case PlaylistID():
                     lib.download_playlist(content_id)
                     if tag:
                         lib.add_tag(tag,content_id)
-                case x:
+                case _:
                     lib.download_channel(content_id,not auxiliary)
         case 'new-tag':
             if tag is None:
@@ -175,7 +173,7 @@ def parse_command(
                 )
             match content_id:
                 case VideoID():
-                    open_mpv(fname(content_id))
+                    open_mpv(lib.media_fs.get_video_url(content_id))
                 case PlaylistID():
                     open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
         case 'play-v':
@@ -191,9 +189,9 @@ def parse_command(
                 content_id = pick_video_fzf(lib.get_all_videos(tag))
             if content_id is not None:
                 if auxiliary:
-                    print(fname(content_id))
+                    print(lib.media_fs.get_video_url(content_id))
                 else:
-                    open_mpv(fname(content_id))
+                    open_mpv(lib.media_fs.get_video_url(content_id))
         case 'play-pl':
             if url:
                 content_id = infer_type(url)
@@ -211,31 +209,7 @@ def parse_command(
         case 'prune':
             lib.prune()
         case 'purge':
-            print(f"Total removed size: {convert_file_size(lib.purge())}")
-        case 'size-v':
-            video_sizes = lib.get_largest_videos()
-            for vid, size in video_sizes[10:0:-1]:
-                print(f"{vid} | {convert_file_size(size)}")
-        case 'size-p':
-            playlists: list[PlaylistID] = [x.id for x in lib.get_all_playlists()]
-            playlist_sizes = []
-            for idx, pid in enumerate(playlists):
-                size = 0
-                for vid in [x.id for x in lib.get_playlist_videos(pid)]:
-                    video_tags = len(lib.db.get_video_tags(vid))
-                    video_playlists = len(lib.db.get_video_playlists(vid))
-                    if video_tags == 0 and video_playlists == 1:
-                        try:
-                            size += os.path.getsize(fname(vid))
-                        except FileNotFoundError:
-                            print(f"ERROR: Missing file: {vid.filename()}")
-                playlist_sizes.append((pid,size))
-                print(f"Enumerating... ({idx+1}/{len(playlists)})",end="\r")
-            print()
-
-            playlist_sizes.sort(key=lambda x: -x[1])
-            for pid, size in playlist_sizes[10:0:-1]:
-                print(f"{pid} | {convert_file_size(size)}")
+            lib.purge()
         case 'update-thumbs':
             lib.update_thumbnails()
 
@@ -252,10 +226,6 @@ def main() -> None:
     arg_parser.add_argument(
         "-m", help="Path to media directory",
         dest="media_dir"
-    )
-    arg_parser.add_argument(
-        "-d", help="Path to store database file",
-        dest="database_path"
     )
     arg_parser.add_argument(
         "-r", help="Maximum video resolution to downloads",
@@ -290,52 +260,41 @@ def main() -> None:
         return
     if args.max_resolution:
         args.library = f"{args.library}.{args.max_resolution}"
-    lib_db = args.database_path if args.database_path else f"{bpath}/{args.library}.db"
-    logged_in_path = ".ytd/master"
-    if logged_in_path:
-        try:
-            with open(f"{logged_in_path}.cjar","r") as _:
-                pass
-            with open(f"{logged_in_path}.pot","r") as _:
-                pass
-        except (FileNotFoundError, IsADirectoryError):
-            logged_in_path = None
-    try_copy(f"{lib_db}.bak", f"{lib_db}.bak2")
-    media_dir: str = f"{bpath}/{args.library}"
-    using_custom_dir = False
+    library_path = f"{bpath}/{args.library}"
+    db_path = f"{library_path}.db"
+    try_copy(f"{db_path}.bak", f"{db_path}.bak2")
+    media_dir: str = library_path
     try:
-        with open(f"{bpath}/{args.library}","r",encoding="utf-8") as f:
+        with open(f"{bpath}/{args.library}","r", encoding="utf-8") as f:
             media_dir = f.read()
-            using_custom_dir = True
     except (FileNotFoundError, IsADirectoryError):
         pass
 
     if args.media_dir:
         media_dir = args.media_dir
-        using_custom_dir = True
-        with open(f"{bpath}/{args.library}","w",encoding="utf-8") as f:
+        with open(f"{bpath}/{args.library}","w", encoding="utf-8") as f:
             f.write(media_dir)
 
     os.makedirs(media_dir, exist_ok=True)
 
-    try_copy(f"{lib_db}.bak", f"{lib_db}.bak2")
-    try_copy(lib_db, f"{lib_db}.bak")
+    try_copy(f"{db_path}.bak", f"{db_path}.bak2")
+    try_copy(db_path, f"{db_path}.bak")
 
     try:
-        library = Library(lib_db,media_dir,args.max_resolution,args.print_db_log,logged_in_path)
+        library = Library(library_path,LocalFilesystem(media_dir),args.max_resolution,args.print_db_log)
     except IOError as e:
-        try_copy(f"{lib_db}.bak2", f"{lib_db}.bak")
+        try_copy(f"{db_path}.bak2", f"{db_path}.bak")
         print(f"Error loading database!\n{e}\nAttempting to revert to backup")
-        shutil.copy(lib_db, f"{lib_db}.err")
-        if not try_copy(f"{lib_db}.bak", lib_db):
+        shutil.copy(db_path, f"{db_path}.err")
+        if not try_copy(f"{db_path}.bak", db_path):
             print("Sorry, no backup could be found")
             return
         try:
-            library = Library(lib_db,media_dir,args.max_resolution,args.print_db_log)
+            library = Library(library_path,LocalFilesystem(media_dir),args.max_resolution,args.print_db_log)
         except IOError as e2:
             print(f"Uh oh...\n{e2}\nBackup is also corrupted or none exists. Sorry mate :(")
             return
-        print(f"Backup loaded successfully, corrupted version stored in {lib_db}.err")
+        print(f"Backup loaded successfully, corrupted version stored as {db_path}.err")
 
     tag: TagID | None = None
     if args.tag:
@@ -345,13 +304,9 @@ def main() -> None:
     library.exit()
 
     try:
-        os.remove(f"{lib_db}.bak2")
+        os.remove(f"{db_path}.bak2")
     except FileNotFoundError:
         pass
-
-    if using_custom_dir:
-        print("Writing database...")
-        shutil.copy(lib_db, f"{media_dir}.db")
 
 if __name__ == "__main__":
     main()

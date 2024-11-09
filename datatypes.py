@@ -1,18 +1,10 @@
-"""Various datatypes used within the project"""
-
+# pylint: disable=too-many-instance-attributes
 import re
 import typing
 from dataclasses import dataclass
 
 class VideoID:
     __slots__ = ('value',)
-    @property
-    def fileloc(self) -> str:
-        return f"{ord(self.value[0])-32}/{ord(self.value[1])-32}/{self.value}.mkv"
-    def filename(self, media_path: str = "") -> str:
-        return f"{media_path}/{self.fileloc}"
-    def foldername(self, media_path: str = "") -> str:
-        return f"{media_path}/{ord(self.value[0])-32}/{ord(self.value[1])-32}"
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, VideoID):
             return NotImplemented

@@ -1,27 +1,30 @@
-import os
-import time
 import urllib.request
 import urllib.error
+import os
 
 from downloader import ytdlp_download_video, ytdlp_download_playlist_metadata
 from dbconnection import Database
 from datatypes import VideoID, PlaylistID
 from datatypes import ChannelHandle, ChannelUUID, TagID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata
-from datatypes import convert_file_size
+from media_filesystem import MediaFilesystem
 
 zero_tag = TagNumID(0)
 
 class Library:
     def __init__(
-        self, db_filename: str, media_dir: str,
-        max_resolution: int | None, print_db_log: bool,
-        login_data_path: str | None
+        self, library_path: str, media_fs: MediaFilesystem,
+        max_resolution: int | None, print_db_log: bool
     ):
-        self.media_dir = media_dir
-        self.db = Database(db_filename,print_db_log)
+        self.media_fs = media_fs
+        self.db = Database(f"{library_path}.db",print_db_log)
         self.max_video_resolution = max_resolution
-        self.login_data_path = login_data_path
+        try:
+            os.path.isfile(f"{library_path}.cjar")
+            os.path.isfile(f"{library_path}.pot")
+            self.login_data_path = library_path
+        except (FileNotFoundError, IsADirectoryError):
+            pass
 
     def exit(self) -> None:
         self.db.exit()
@@ -29,65 +32,32 @@ class Library:
     def write_log(self, category: str, contents: str) -> None:
         self.db.write_log(category,contents)
 
-    def get_all_filesystem_videos(self) -> list[VideoID]:
-        start = time.perf_counter_ns()
-        videos_list = []
-        dir0list = [x for x in os.scandir(f"{self.media_dir}") if x.is_dir() and x.name != "thumbs"]
-        for dir0idx, dir0item in enumerate(dir0list):
-            dir1list = [x for x in os.scandir(dir0item) if x.is_dir()]
-            for dir1item in dir1list:
-                dir2list = [
-                    VideoID(x.name[:-4]) for x in
-                    os.scandir(dir1item)
-                    if not x.is_dir() and x.name[-4:]=='.mkv' and x.name[0] != "."
-                ]
-                videos_list += dir2list
-            print(
-                f"Enumerating directories: {dir0idx+1} / {len(dir0list)} "
-                f"({len(videos_list)} items)",end="\r"
-            )
-        end = time.perf_counter_ns()
-        print(f"\nEnumerated {len(videos_list)} videos in {(end-start)/1_000_000_000:.2f} seconds")
-        return videos_list
-
     def download_thumbnail(self, video: VideoID) -> None:
-        fileloc = f"{video.foldername(f"{self.media_dir}/thumbs")}/{video}.jpg"
-        if os.path.isfile(fileloc):
+        fileloc = f"/tmp/thumb.{video}.jpg"
+        if self.media_fs.thumbnail_exists(video):
             return
-        os.makedirs(video.foldername(f"{self.media_dir}/thumbs"), exist_ok=True)
-        try:
-            urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/maxresdefault.jpg", fileloc)
-            return
-        except urllib.error.HTTPError:
-            pass
-        try:
-            urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/sddefault.jpg", fileloc)
-            print(f"{video} only had SD thumbnail")
-            return
-        except urllib.error.HTTPError:
+        download_paths: list[tuple[str,str|None]] = [
+            (f"https://i.ytimg.com/vi/{video}/maxresdefault.jpg",None),
+            (f"https://i.ytimg.com/vi/{video}/hq720.jpg",None),
+            (f"https://i.ytimg.com/vi/{video}/sddefault.jpg",'SD'),
+            # Don't ask my why SD Default is higher quality than HQ default
+            (f"https://i.ytimg.com/vi/{video}/hqdefault.jpg",'SD'),
+            (f"https://i.ytimg.com/vi/{video}/mqdefault.jpg","LQ"),
+            (f"https://i.ytimg.com/vi/{video}/default.jpg",'basic')
+        ]
+        for url, thumb_type in download_paths:
             try:
-                # Don't ask my why SD Default is higher quality than HQ default
-                urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/hqdefault.jpg", fileloc)
-                print(f"{video} only had SD thumbnail")
+                urllib.request.urlretrieve(url, fileloc)
+                self.media_fs.write_thumbnail(video,fileloc)
+                if thumb_type:
+                    print(f"[INFO] {video} only had {thumb_type} thumbnail")
                 return
             except urllib.error.HTTPError:
                 pass
-        try:
-            urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/mqdefault.jpg", fileloc)
-            print(f"{video} only had LQ thumbnail")
-            return
-        except urllib.error.HTTPError:
-            pass
-        try:
-            urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{video}/mqdefault.jpg", fileloc)
-            print(f"{video} only had basic thumbnail")
-            return
-        except urllib.error.HTTPError:
-            pass
-        print(f"[ERROR] {video} has no thumbnails!")
+        print(f"[WARN] {video} has no thumbnails!")
 
     def update_thumbnails(self) -> None:
-        all_videos = self.get_all_filesystem_videos()
+        all_videos = self.media_fs.list_all_videos()
         for i,video in enumerate(all_videos):
             self.download_thumbnail(video)
             print(f"Updating thumbnails: {i+1} / {len(all_videos)}\r",end='')
@@ -102,7 +72,7 @@ class Library:
         m3ustring = "#EXTM3U\n#EXTENC:UTF-8\n"
         m3ustring += f"#PLAYLIST:{data.title}\n"
         for item in (list(reversed(data.entries)) if invert else data.entries):
-            m3ustring+=f"#EXTINF:{item.duration},{item.title}\n{item.id.filename(self.media_dir)}\n"
+            m3ustring+=f"#EXTINF:{item.duration},{item.title}\n{self.media_fs.get_video_url(item.id)}\n"
         return m3ustring
 
     def create_tag(self, tag: TagID, description: str) -> None:
@@ -207,10 +177,10 @@ class Library:
         db_entry = self.db.get_video_info(vid)
         if db_entry is None:
             self.download_thumbnail(vid)
-            video_metadata = ytdlp_download_video(self.media_dir, vid, self.max_video_resolution, None)
+            video_metadata = ytdlp_download_video(self.media_fs, vid, self.max_video_resolution, None)
             if video_metadata is None and self.login_data_path:
                 print("Attempting logged in")
-                video_metadata = ytdlp_download_video(self.media_dir, vid, self.max_video_resolution, self.login_data_path)
+                video_metadata = ytdlp_download_video(self.media_fs, vid, self.max_video_resolution, self.login_data_path)
 
             if video_metadata is not None:
                 self.save_channel_info(ChannelUUID(video_metadata['channel_id']))
@@ -257,47 +227,22 @@ class Library:
 
     def purge(self) -> int:
         videos_database = [x.id for x in self.get_all_videos()]
-        total_size = 0
-        for fs_vid in self.get_all_filesystem_videos():
+        count = 0
+        for fs_vid in self.media_fs.list_all_videos():
             if fs_vid not in videos_database:
-                fname = fs_vid.filename(self.media_dir)
-                size = os.path.getsize(fname)
-                total_size += size
-                os.remove(fname)
-        return total_size
+                self.media_fs.delete_video(fs_vid)
+        return count
 
     def integrity_check(self) -> None:
-        videos_filesystem: list[VideoID] = self.get_all_filesystem_videos()
+        videos_filesystem: list[VideoID] = self.media_fs.list_all_videos()
         videos_database: list[VideoID] = [x.id for x in self.get_all_videos()]
-        total_size = 0
         for vid in videos_filesystem:
             if vid not in videos_database:
-                size = os.path.getsize(vid.filename(self.media_dir))
-                total_size += size
-                print(f"Orphaned file: {vid.filename()} | {convert_file_size(size)}")
-        print(f"Total orphaned file size: {convert_file_size(total_size)}")
-        total_size = 0
+                print(f"Orphaned file: {vid}")
         for vid in videos_database:
             if vid not in videos_filesystem:
-                print(f"ERROR: Missing file: {vid.fileloc}")
+                print(f"ERROR: Missing file: {vid}")
             video_tags = len(self.db.get_video_tags(vid))
             video_playlists = len(self.db.get_video_playlists(vid))
             if video_tags == 0 and video_playlists == 0:
-                size = os.path.getsize(vid.filename(self.media_dir))
-                total_size += size
-                print(f"Orphaned video: {vid} | {convert_file_size(size)}")
-        print(f"Total orphaned video size: {convert_file_size(total_size)}")
-
-    def get_largest_videos(self) -> list[tuple[VideoID,int]]:
-        video_sizes = []
-        for vid in [x.id for x in self.get_all_videos()]:
-            is_single_video = len([
-                x for x in self.db.get_video_tags(vid) if x != TagNumID(0)
-            ]) <= 1
-            if is_single_video and len(self.db.get_video_playlists(vid)) == 0:
-                try:
-                    video_sizes.append((vid,os.path.getsize(vid.filename(self.media_dir))))
-                except FileNotFoundError:
-                    print(f"ERROR: Missing file: {vid.fileloc}")
-        video_sizes.sort(key=lambda x: -x[1])
-        return video_sizes
+                print(f"Orphaned video: {vid}")
