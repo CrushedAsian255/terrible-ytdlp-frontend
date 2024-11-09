@@ -2,6 +2,10 @@ import os
 import time
 import shutil
 
+import boto3
+from botocore.config import Config
+from botocore.exceptions import ClientError
+
 from datatypes import VideoID, convert_file_size
 
 class MediaFilesystem:
@@ -94,3 +98,55 @@ class LocalFilesystem(MediaFilesystem):
         end = time.perf_counter_ns()
         print(f"\nEnumerated {len(videos_list)} videos in {(end-start)/1_000_000_000:.2f} seconds")
         return videos_list
+
+class AWSFilesystem(MediaFilesystem):
+    def _filename(self, vid: VideoID) -> str:
+        return f"{self.prefix}{vid.value}.mkv"
+    def _thumbnail_filename(self, vid: VideoID) -> str:
+        return f"{self.prefix}{vid.value}.jpg"
+    def __init__(self, bucket_name: str, prefix: str | None):
+        self.s3 = boto3.resource(
+            service_name="s3",
+            endpoint_url=os.getenv("AWS_ENDPOINT_URL"),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            config = Config(signature_version='s3v4')
+        )
+        self.bucket_name = bucket_name
+        self.prefix = "" if prefix is None else f"{prefix}/"
+    def write_video(self, vid: VideoID, src_path: str) -> bool:
+        self.s3.Bucket(self.bucket_name).upload_file(src_path, self._filename(vid))
+    def get_video_url(self, vid: VideoID) -> str:
+        return self.s3.meta.client.generate_presigned_url(
+            ClientMethod='get_object',
+            ExpiresIn=60*60*24,
+            Params={'Bucket': self.bucket_name,'Key': self._filename(vid)}
+        )
+    def video_exists(self, vid: VideoID) -> bool:
+        try:
+            obj = self.s3.meta.client.head_object(Bucket=self.bucket_name, Key=self._filename(vid))
+            return True
+        except ClientError as exc:
+            if exc.response['Error']['Code'] == '404':
+                return False
+            raise ValueError()
+    def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
+        self.s3.Bucket(self.bucket_name).upload_file(src_path, self._thumbnail_filename(vid))
+    def get_thumbnail_url(self, vid: VideoID) -> str:
+        return self.s3.meta.client.generate_presigned_url(
+            ClientMethod='get_object',
+            ExpiresIn=60*60*24,
+            Params={'Bucket': self.bucket_name,'Key': self._thumbnail_filename(vid)}
+        )
+    def thumbnail_exists(self, vid: VideoID) -> bool:
+        try:
+            obj = self.s3.meta.client.head_object(Bucket=self.bucket_name, Key=self._thumbnail_filename(vid))
+            return True
+        except ClientError as exc:
+            if exc.response['Error']['Code'] == '404':
+                return False
+            raise ValueError()
+    def delete_video(self, vid: VideoID):
+        raise NotImplementedError()
+    def list_all_videos(self) -> list[VideoID]:
+        raise NotImplementedError()

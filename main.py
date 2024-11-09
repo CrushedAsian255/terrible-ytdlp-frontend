@@ -10,7 +10,7 @@ from library import Library
 from datatypes import VideoID, PlaylistID
 from datatypes import ChannelHandle, ChannelUUID, TagID
 from datatypes import VideoMetadata, PlaylistMetadata
-from media_filesystem import MediaFilesystem, LocalFilesystem
+from media_filesystem import MediaFilesystem, LocalFilesystem, AWSFilesystem
 
 def get_item_fzf(items: list[str]) -> str | None:
     with subprocess.Popen(
@@ -79,6 +79,16 @@ def pick_content_fzf(
     raise ValueError(x)
 
 def parse_custom_media_fs(media_handle: str) -> MediaFilesystem:
+    split_handle = media_handle.split(":")
+    match split_handle[0]:
+        case "s3":
+            if len(split_handle) > 2:
+                return AWSFilesystem(split_handle[1],split_handle[2])
+            else:
+                return AWSFilesystem(split_handle[1],None)
+        case _:
+            return LocalFilesystem(media_handle)
+
     return LocalFilesystem(media_handle)
 
 def parse_command(
