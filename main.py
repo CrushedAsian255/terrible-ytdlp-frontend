@@ -10,7 +10,7 @@ from library import Library
 from datatypes import VideoID, PlaylistID
 from datatypes import ChannelHandle, ChannelUUID, TagID
 from datatypes import VideoMetadata, PlaylistMetadata
-from media_filesystem import LocalFilesystem
+from media_filesystem import MediaFilesystem, LocalFilesystem
 
 def get_item_fzf(items: list[str]) -> str | None:
     with subprocess.Popen(
@@ -77,6 +77,9 @@ def pick_content_fzf(
     except ValueError:
         pass
     raise ValueError(x)
+
+def parse_custom_media_fs(media_handle: str) -> MediaFilesystem:
+    return LocalFilesystem(media_handle)
 
 def parse_command(
     lib: Library,
@@ -225,7 +228,7 @@ def main() -> None:
 
     arg_parser.add_argument(
         "-m", help="Path to media directory",
-        dest="media_dir"
+        dest="media_handle"
     )
     arg_parser.add_argument(
         "-r", help="Maximum video resolution to downloads",
@@ -260,25 +263,29 @@ def main() -> None:
     library_path = f"{bpath}/{args.library}"
     db_path = f"{library_path}.db"
     try_copy(f"{db_path}.bak", f"{db_path}.bak2")
-    media_dir: str = library_path
+    
+    custom_media_handle: str | None = None
     try:
         with open(f"{bpath}/{args.library}","r", encoding="utf-8") as f:
-            media_dir = f.read()
+            custom_media_handle = f.read()
     except (FileNotFoundError, IsADirectoryError):
         pass
 
-    if args.media_dir:
-        media_dir = args.media_dir
+    if args.media_handle:
+        custom_media_handle = args.media_handle
         with open(f"{bpath}/{args.library}","w", encoding="utf-8") as f:
-            f.write(media_dir)
+            f.write(custom_media_handle)
 
-    os.makedirs(media_dir, exist_ok=True)
+    if custom_media_handle:
+        media_fs = parse_custom_media_fs(custom_media_handle)
+    else:
+        media_fs = LocalFilesystem(library_path)
 
     try_copy(f"{db_path}.bak", f"{db_path}.bak2")
     try_copy(db_path, f"{db_path}.bak")
 
     try:
-        library = Library(library_path,LocalFilesystem(media_dir),args.max_resolution,args.print_db_log)
+        library = Library(library_path,media_fs,args.max_resolution,args.print_db_log)
     except IOError as e:
         try_copy(f"{db_path}.bak2", f"{db_path}.bak")
         print(f"Error loading database!\n{e}\nAttempting to revert to backup")
@@ -287,7 +294,7 @@ def main() -> None:
             print("Sorry, no backup could be found")
             return
         try:
-            library = Library(library_path,LocalFilesystem(media_dir),args.max_resolution,args.print_db_log)
+            library = Library(library_path,media_fs,args.max_resolution,args.print_db_log)
         except IOError as e2:
             print(f"Uh oh...\n{e2}\nBackup is also corrupted or none exists. Sorry mate :(")
             return
