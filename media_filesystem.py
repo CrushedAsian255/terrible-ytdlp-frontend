@@ -25,22 +25,22 @@ class MediaFilesystem:
         raise NotImplementedError()
 
 class LocalFilesystem(MediaFilesystem):
-    def foldername(self, vid: VideoID) -> str:
+    def _foldername(self, vid: VideoID) -> str:
         return f"{self.path}/{ord(vid.value[0])-32}/{ord(vid.value[1])-32}"
-    def filename(self, vid: VideoID) -> str:
-        return f"{self.foldername(vid)}/{vid.value}.mkv"
-    def thumbnail_foldername(self, vid: VideoID) -> str:
+    def _filename(self, vid: VideoID) -> str:
+        return f"{self._foldername(vid)}/{vid.value}.mkv"
+    def _thumbnail_foldername(self, vid: VideoID) -> str:
         return f"{self.path}/thumbs/{ord(vid.value[0])-32}/{ord(vid.value[1])-32}"
-    def thumbnail_filename(self, vid: VideoID) -> str:
-        return f"{self.thumbnail_foldername(vid)}/{vid.value}.jpg"
+    def _thumbnail_filename(self, vid: VideoID) -> str:
+        return f"{self._thumbnail_foldername(vid)}/{vid.value}.jpg"
 
     def __init__(self, path: str):
         self.path = path
         os.makedirs(path,exist_ok=True)
     def write_video(self, vid: VideoID, src_path: str) -> bool:
-        os.makedirs(self.foldername(vid),exist_ok=True)
+        os.makedirs(self._foldername(vid),exist_ok=True)
         src_size = os.stat(src_path).st_size
-        dest_path = self.filename(vid)
+        dest_path = self._filename(vid)
         with open(src_path, "rb") as src:
             with open(f"{dest_path}.tmp", "wb") as dest:
                 copied = 0
@@ -60,20 +60,20 @@ class LocalFilesystem(MediaFilesystem):
         os.rename(f"{dest_path}.tmp", dest_path)
         return True
     def get_video_url(self, vid: VideoID) -> str:
-        return self.filename(vid)
+        return self._filename(vid)
     def video_exists(self, vid: VideoID) -> bool:
-        return os.path.isfile(self.filename(vid))
+        return os.path.isfile(self._filename(vid))
     def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
-        os.makedirs(self.thumbnail_foldername(vid), exist_ok=True)
-        shutil.copyfile(src_path,self.thumbnail_filename(vid))
+        os.makedirs(self._thumbnail_foldername(vid), exist_ok=True)
+        shutil.copyfile(src_path,self._thumbnail_filename(vid))
         return True
     def get_thumbnail_url(self, vid: VideoID) -> str:
-        return self.thumbnail_filename(vid)
+        return self._thumbnail_filename(vid)
     def thumbnail_exists(self, vid: VideoID) -> bool:
-        return os.path.isfile(self.thumbnail_filename(vid))
+        return os.path.isfile(self._thumbnail_filename(vid))
     def delete_video(self, vid: VideoID):
-        os.remove(self.filename(vid))
-        os.remove(self.thumbnail_filename(vid))
+        os.remove(self._filename(vid))
+        os.remove(self._thumbnail_filename(vid))
     def list_all_videos(self) -> list[VideoID]:
         start = time.perf_counter_ns()
         videos_list = []
