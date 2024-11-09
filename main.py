@@ -252,9 +252,6 @@ def main() -> None:
     args = arg_parser.parse_args()
 
     bpath = os.path.expanduser("~/YouTube")
-    if args.library == 'master' and (args.database_path or args.media_dir):
-        print("Error: cannot use master db with custom paths")
-        return
     if args.max_resolution and args.library == "master":
         print("Error: cannot use master db with resolution caps")
         return
