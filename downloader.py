@@ -75,11 +75,12 @@ def ytdlp_download_video(media_fs: MediaFilesystem, vid: VideoID, max_res: int |
     if info is None or info["is_live"] is True:
         return None
 
-    src_file = f"/tmp/video_dl_{vid}.mkv"
-    if not os.path.isfile(src_file):
-        raise IOError("Error downloading video")
-    media_fs.write_video(vid,src_file)
-    os.remove(src_file)
+    if not media_fs.video_exists(vid):
+        src_file = f"/tmp/video_dl_{vid}.mkv"
+        if not os.path.isfile(src_file):
+            raise IOError("Error downloading video")
+        media_fs.write_video(vid,src_file)
+        os.remove(src_file)
     return info
 
 def ytdlp_download_playlist_metadata(purl: str , channel_mode: bool = False) -> InfoDict | None:

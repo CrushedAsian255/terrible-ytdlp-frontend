@@ -114,8 +114,20 @@ class AWSFilesystem(MediaFilesystem):
         )
         self.bucket_name = bucket_name
         self.prefix = "" if prefix is None else f"{prefix}/"
+        self.uploaded = 0
+        self.total = 0
+    def _upload_callback(self, size):
+        self.uploaded += size
+        print(
+            f"Uploading file: {convert_file_size(self.uploaded)} / {convert_file_size(self.total)}, "
+            f"{self.uploaded*100/self.total:.01f}%",end="\r"
+        )
     def write_video(self, vid: VideoID, src_path: str) -> bool:
-        self.s3.Bucket(self.bucket_name).upload_file(src_path, self._filename(vid))
+        self.total = os.stat(src_path).st_size
+        self.uploaded = 0
+        print("Uploading file",end="\r")
+        self.s3.Bucket(self.bucket_name).upload_file(src_path, self._filename(vid),Callback=self._upload_callback)
+        print("\nUploaded!")
     def get_video_url(self, vid: VideoID) -> str:
         return self.s3.meta.client.generate_presigned_url(
             ClientMethod='get_object',
@@ -131,7 +143,9 @@ class AWSFilesystem(MediaFilesystem):
                 return False
             raise ValueError()
     def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
+        print("Uploading thumbnail")
         self.s3.Bucket(self.bucket_name).upload_file(src_path, self._thumbnail_filename(vid))
+        print("Uploaded!")
     def get_thumbnail_url(self, vid: VideoID) -> str:
         return self.s3.meta.client.generate_presigned_url(
             ClientMethod='get_object',
