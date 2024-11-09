@@ -81,14 +81,14 @@ class Library:
     def add_tag(self, tag: TagID, content_id: VideoID | PlaylistID) -> None:
         match content_id:
             case VideoID():
-                self.db.add_tag_to_video(
-                    self.db.get_tnumid(tag),
-                    self.db.get_vnumid(content_id)
+                self.db.add_tag(
+                    tag,
+                    content_id
                 )
             case PlaylistID():
-                self.db.add_tag_to_playlist(
-                    self.db.get_tnumid(tag),
-                    self.db.get_pnumid(content_id)
+                self.db.add_tag(
+                    tag,
+                    content_id
                 )
 
     def get_all_videos(self, tag: TagID | None = None) -> list[VideoMetadata]:
@@ -171,7 +171,6 @@ class Library:
                 entries=[v for v in videos if self.db.get_video_info(v)]
             )
         )
-        self.db.add_tag_to_playlist(zero_tag, self.db.get_pnumid(pid))
 
     def download_video(self, vid: VideoID, add_tag: bool = True) -> None:
         db_entry = self.db.get_video_info(vid)
@@ -194,9 +193,7 @@ class Library:
                     upload_timestamp=video_metadata['timestamp'],
                     duration=video_metadata['duration'],
                     epoch=video_metadata['epoch'],
-                ))
-                if add_tag:
-                    self.db.add_tag_to_video(zero_tag, self.db.get_vnumid(vid))
+                ), add_tag)
         else:
             self.save_channel_info(db_entry.channel_id)
 
@@ -219,7 +216,7 @@ class Library:
 
     def prune(self) -> None:
         for db_vid in [x.id for x in self.get_all_videos()]:
-            video_tags = len(self.db.get_video_tags(db_vid))
+            video_tags = len(self.db.get_tags(db_vid))
             video_playlists = len(self.db.get_video_playlists(db_vid))
             if video_tags == 0 and video_playlists == 0:
                 print(f"Removing orphaned video: {db_vid}")
@@ -242,7 +239,7 @@ class Library:
         for vid in videos_database:
             if vid not in videos_filesystem:
                 print(f"ERROR: Missing file: {vid}")
-            video_tags = len(self.db.get_video_tags(vid))
+            video_tags = len(self.db.get_tags(vid))
             video_playlists = len(self.db.get_video_playlists(vid))
             if video_tags == 0 and video_playlists == 0:
                 print(f"Orphaned video: {vid}")

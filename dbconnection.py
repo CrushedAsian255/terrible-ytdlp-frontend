@@ -11,7 +11,7 @@ from datatypes import VideoNumID, PlaylistNumID, ChannelNumID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata, TagMetadata
 
 class Database:
-    def exec(self, sql: str, params: tuple[Any, ...] | None = None) -> list[tuple[Any, ...]]:
+    def _exec(self, sql: str, params: tuple[Any, ...] | None = None) -> list[tuple[Any, ...]]:
         if params is None:
             params = ()
         new_params: list[Any] = []
@@ -50,7 +50,7 @@ class Database:
         self.db_filename = dbfname
         self.connection = sqlite3.connect(self.db_filename)
         try:
-            int_check = self.exec("PRAGMA integrity_check")
+            int_check = self._exec("PRAGMA integrity_check")
         except sqlite3.DatabaseError as e:
             raise IOError("Invalid database") from e
         self.connection.commit()
@@ -58,19 +58,19 @@ class Database:
         if int_check[0][0]!='ok':
             raise IOError(f"FATAL ERROR: Database corrupt: {int_check}")
 
-        self.exec("PRAGMA foreign_keys=ON")
+        self._exec("PRAGMA foreign_keys=ON")
         self.connection.commit()
-        if self.exec("PRAGMA foreign_keys")[0][0] != 1:
+        if self._exec("PRAGMA foreign_keys")[0][0] != 1:
             raise OSError("Build of sqlite3 does not support foreign keys")
 
-        self.exec('''CREATE TABLE IF NOT EXISTS Log (
+        self._exec('''CREATE TABLE IF NOT EXISTS Log (
             ts INTEGER PRIMARY KEY,
             category TEXT NOT NULL,
             content TEXT NOT NULL
         ) STRICT''')
-        self.exec("CREATE INDEX IF NOT EXISTS idx_log_category ON Log(category)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_log_category ON Log(category)")
 
-        self.exec('''CREATE TABLE IF NOT EXISTS Channel (
+        self._exec('''CREATE TABLE IF NOT EXISTS Channel (
             num_id INTEGER PRIMARY KEY,
             id TEXT NOT NULL UNIQUE,
             handle TEXT NOT NULL UNIQUE,
@@ -81,9 +81,9 @@ class Database:
             removed INTEGER NOT NULL DEFAULT 0,
             aux_data TEXT
         ) STRICT''')
-        self.exec("CREATE INDEX IF NOT EXISTS idx_channel_id ON Channel(id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_channel_id ON Channel(id)")
 
-        self.exec('''CREATE TABLE IF NOT EXISTS Video (
+        self._exec('''CREATE TABLE IF NOT EXISTS Video (
             num_id INTEGER PRIMARY KEY,
             id TEXT NOT NULL UNIQUE,
 
@@ -98,10 +98,10 @@ class Database:
             aux_data TEXT,
             FOREIGN KEY (channel_id) REFERENCES Channel(num_id)      
         ) STRICT''')
-        self.exec("CREATE INDEX IF NOT EXISTS idx_video_id ON Video(id)")
-        self.exec("CREATE INDEX IF NOT EXISTS idx_video_channel ON Video(channel_id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_video_id ON Video(id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_video_channel ON Video(channel_id)")
 
-        self.exec('''CREATE TABLE IF NOT EXISTS Playlist (
+        self._exec('''CREATE TABLE IF NOT EXISTS Playlist (
             num_id INTEGER PRIMARY KEY,
             id TEXT NOT NULL UNIQUE,
 
@@ -118,10 +118,10 @@ class Database:
             aux_data TEXT,
             FOREIGN KEY (channel_id) REFERENCES Channel(num_id)
         ) STRICT''')
-        self.exec("CREATE INDEX IF NOT EXISTS idx_playlist_id ON Playlist(id)")
-        self.exec("CREATE INDEX IF NOT EXISTS idx_playlist_channel ON Playlist(channel_id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_playlist_id ON Playlist(id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_playlist_channel ON Playlist(channel_id)")
 
-        self.exec('''CREATE TABLE IF NOT EXISTS Pointer (
+        self._exec('''CREATE TABLE IF NOT EXISTS Pointer (
             playlist_id INTEGER NOT NULL,
             video_id INTEGER NOT NULL,
             
@@ -131,17 +131,17 @@ class Database:
             FOREIGN KEY (playlist_id) REFERENCES Playlist(num_id) ON DELETE CASCADE,
             FOREIGN KEY (video_id) REFERENCES Video(num_id) ON DELETE CASCADE
         ) STRICT''')
-        self.exec("CREATE INDEX IF NOT EXISTS idx_pointer_playlist ON Pointer(playlist_id)")
-        self.exec("CREATE INDEX IF NOT EXISTS idx_pointer_video ON Pointer(video_id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_pointer_playlist ON Pointer(playlist_id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_pointer_video ON Pointer(video_id)")
 
-        self.exec('''CREATE TABLE IF NOT EXISTS Tag (
+        self._exec('''CREATE TABLE IF NOT EXISTS Tag (
             num_id INTEGER PRIMARY KEY,
             id TEXT NOT NULL UNIQUE,
             description TEXT,
             aux_data TEXT
         ) STRICT''')
 
-        self.exec('''CREATE TABLE IF NOT EXISTS TaggedVideo (
+        self._exec('''CREATE TABLE IF NOT EXISTS TaggedVideo (
             tag_id INTEGER NOT NULL,
             video_id INTEGER NOT NULL,
             
@@ -150,10 +150,10 @@ class Database:
             FOREIGN KEY (tag_id) REFERENCES Tag (num_id) ON DELETE CASCADE,
             FOREIGN KEY (video_id) REFERENCES Video (num_id) ON DELETE CASCADE
         ) STRICT''')
-        self.exec("CREATE INDEX IF NOT EXISTS idx_tag_video ON TaggedVideo(tag_id)")
-        self.exec("CREATE INDEX IF NOT EXISTS idx_tag_vid ON TaggedVideo(video_id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_tag_video ON TaggedVideo(tag_id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_tag_vid ON TaggedVideo(video_id)")
 
-        self.exec('''CREATE TABLE IF NOT EXISTS TaggedPlaylist (
+        self._exec('''CREATE TABLE IF NOT EXISTS TaggedPlaylist (
             tag_id INTEGER NOT NULL,
             playlist_id INTEGER NOT NULL,
             
@@ -162,21 +162,21 @@ class Database:
             FOREIGN KEY (tag_id) REFERENCES Tag (num_id) ON DELETE CASCADE,
             FOREIGN KEY (playlist_id) REFERENCES Playlist (num_id) ON DELETE CASCADE
         ) STRICT''')
-        self.exec("CREATE INDEX IF NOT EXISTS idx_tag_playlist ON TaggedPlaylist(tag_id)")
-        self.exec("CREATE INDEX IF NOT EXISTS idx_tag_pid ON TaggedPlaylist(playlist_id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_tag_playlist ON TaggedPlaylist(tag_id)")
+        self._exec("CREATE INDEX IF NOT EXISTS idx_tag_pid ON TaggedPlaylist(playlist_id)")
 
-        self.exec("INSERT OR IGNORE INTO Tag(num_id,id,description) VALUES (?,?,?)",(0,'',None))
+        self._exec("INSERT OR IGNORE INTO Tag(num_id,id,description) VALUES (?,?,?)",(0,'',None))
 
         self.connection.commit()
 
     def write_log(self, category: str, contents: str) -> None:
-        self.exec('''
+        self._exec('''
             INSERT INTO Log(ts,category,content) VALUES (?,?,?)
         ''',(int(time.time()*1000000), category, contents))
         self.connection.commit()
 
     def get_video_info(self, vid: VideoID) -> VideoMetadata | None:
-        data = self.exec('''
+        data = self._exec('''
         SELECT
             Video.id,Video.title,Video.description,Video.upload_timestamp,
             Video.duration,Video.epoch,Channel.handle,Channel.id,Channel.title
@@ -197,8 +197,8 @@ class Database:
             channel_id=ChannelUUID(data[0][7]),
             channel_name=data[0][8]
         )
-    def write_video_info(self, video: VideoMetadata) -> VideoNumID:
-        db_out = self.exec('''
+    def write_video_info(self, video: VideoMetadata, add_tag: bool) -> VideoNumID:
+        db_out = self._exec('''
         INSERT OR REPLACE INTO Video(id,title,description,upload_timestamp,duration,epoch,channel_id)
         VALUES (
             ?,?,?,?,?,?,
@@ -213,10 +213,15 @@ class Database:
             video.channel_id
         ))
         self.connection.commit()
+        if add_tag:
+            self._exec(
+                "INSERT OR REPLACE INTO TaggedVideo(tag_id,video_id) VALUES (0,?)",
+                (db_out[0][0],)
+            )
         return cast(VideoNumID,db_out[0][0])
 
     def get_playlist_info(self, pid: PlaylistID) -> PlaylistMetadata[list[VideoMetadata]] | None:
-        data = self.exec('''
+        data = self._exec('''
         SELECT
             Playlist.id, Playlist.title, Playlist.description, Playlist.epoch,
             Channel.id, Channel.title, Channel.handle, Playlist.num_id
@@ -241,7 +246,7 @@ class Database:
                 channel_id=ChannelUUID(x[6]),
                 channel_handle=ChannelHandle(x[8]),
                 channel_name=x[7]
-            ) for x in self.exec('''
+            ) for x in self._exec('''
                 SELECT
                     Video.id, Video.title, Video.description,
                     Video.upload_timestamp, Video.duration, Video.epoch,
@@ -257,7 +262,7 @@ class Database:
             channel_handle=ChannelHandle(data[0][6])
         )
     def write_playlist_info(self, playlist: PlaylistMetadata[list[VideoID]]) -> PlaylistNumID:
-        db_out = self.exec(
+        db_out = self._exec(
             '''INSERT OR REPLACE INTO Playlist(id,title,description,epoch,count,channel_id)
             VALUES (?,?,?,?,?,(SELECT num_id FROM Channel WHERE id=?)) RETURNING (num_id)''',
             (
@@ -265,20 +270,24 @@ class Database:
                 playlist.entry_count, playlist.channel_id
             )
         )
-        pnumid = self.exec("SELECT num_id FROM Playlist WHERE id=?",(playlist.id,))[0][0]
-        self.exec("DELETE FROM Pointer WHERE playlist_id=?",(pnumid,))
+        pnumid = self._exec("SELECT num_id FROM Playlist WHERE id=?",(playlist.id,))[0][0]
+        self._exec("DELETE FROM Pointer WHERE playlist_id=?",(pnumid,))
         for x in enumerate(playlist.entries):
-            self.exec(
+            self._exec(
                 '''INSERT INTO Pointer(playlist_id, video_id, position)
                 VALUES (?,(SELECT num_id FROM Video WHERE id=?),?)''',(pnumid,x[1],x[0])
             )
         self.connection.commit()
+        self._exec(
+            "INSERT OR REPLACE INTO TaggedPlaylist(tag_id,playlist_id) VALUES (0,?)",
+            (pnumid,)
+        )
         return PlaylistNumID(db_out[0][0])
 
     def get_channel_info(self, cid: ChannelUUID | ChannelHandle) -> ChannelMetadata | None:
         match cid:
             case ChannelUUID():
-                data = self.exec('''
+                data = self._exec('''
                 SELECT
                     id, handle, title, description, epoch
                 FROM Channel
@@ -294,7 +303,7 @@ class Database:
                     epoch=int(data[0][4])
                 )
             case ChannelHandle():
-                data = self.exec('''
+                data = self._exec('''
                 SELECT
                     id, handle, title, description, epoch
                 FROM Channel
@@ -310,7 +319,7 @@ class Database:
                     epoch=int(data[0][4])
                 )
     def write_channel_info(self, channel: ChannelMetadata) -> None:
-        self.exec(
+        self._exec(
             "INSERT OR REPLACE INTO Channel(id,handle,title,description,epoch) VALUES (?,?,?,?,?)",
             (channel.id, channel.handle, channel.title, channel.description, int(channel.epoch))
         )
@@ -327,7 +336,7 @@ class Database:
             channel_id=ChannelUUID(data[6]),
             channel_handle=ChannelHandle(data[8]),
             channel_name=data[7]
-        ) for data in self.exec(f'''
+        ) for data in self._exec(f'''
             SELECT
                 Video.id, Video.title, Video.description, Video.upload_timestamp,
                 Video.duration, Video.epoch, Channel.id, Channel.title, Channel.handle
@@ -351,7 +360,7 @@ class Database:
             entries=int(playlist[3]),
             channel_name=playlist[6],
             channel_handle=ChannelHandle(playlist[7])
-        ) for playlist in self.exec(f'''
+        ) for playlist in self._exec(f'''
             SELECT
                 Playlist.id, Playlist.title, Playlist.description,
                 Playlist.count, Playlist.epoch,
@@ -370,7 +379,7 @@ class Database:
     def get_video_playlists(self, vid: VideoID) -> list[tuple[PlaylistNumID,int]]:
         return [
             (PlaylistNumID(a),b) for a,b in
-            self.exec(
+            self._exec(
                 "SELECT playlist_id, position FROM Pointer WHERE video_id = ?",
                 (self.get_vnumid(vid),)
             )
@@ -387,7 +396,7 @@ class Database:
             channel_id=ChannelUUID(data[6]),
             channel_handle=ChannelHandle(data[8]),
             channel_name=data[7]
-        ) for data in self.exec('''
+        ) for data in self._exec('''
             SELECT
                 Video.id, Video.title, Video.description,
                 Video.upload_timestamp, Video.duration, Video.epoch,
@@ -406,7 +415,7 @@ class Database:
             channel_handle=ChannelHandle(playlist[7]),
             entries=int(playlist[3]),
             channel_name=playlist[6]
-        ) for playlist in self.exec('''
+        ) for playlist in self._exec('''
             SELECT
                 Playlist.id, Playlist.title, Playlist.description,
                 Playlist.count, Playlist.epoch,
@@ -419,23 +428,32 @@ class Database:
     def get_vnumid(self, vid: VideoID | None) -> VideoNumID | None:
         if vid is None:
             return None
-        data = self.exec("SELECT num_id FROM Video WHERE id=?",(vid,))
+        data = self._exec("SELECT num_id FROM Video WHERE id=?",(vid,))
         if len(data)==0:
             return None
         return VideoNumID(data[0][0])
     def get_pnumid(self, pid: PlaylistID) -> PlaylistNumID | None:
-        data = self.exec("SELECT num_id FROM Playlist WHERE id=?",(pid,))
+        data = self._exec("SELECT num_id FROM Playlist WHERE id=?",(pid,))
         if len(data) == 0:
             return None
         return PlaylistNumID(data[0][0])
     def get_tnumid(self, tid: TagID) -> TagNumID | None:
-        output = self.exec("SELECT num_id FROM Tag WHERE id=?",(tid,))
+        output = self._exec("SELECT num_id FROM Tag WHERE id=?",(tid,))
         if len(output) == 0:
             return None
         return TagNumID(output[0][0])
 
+    def create_tag(self, tid: TagID, description: str) -> TagNumID:
+        db_out = self._exec(
+            "INSERT INTO Tag(id,description) VALUES (?,?) RETURNING (num_id)",(
+            tid,description))
+        self.connection.commit()
+        return TagNumID(db_out[0][0])
+    def delete_tag(self, tid: TagID) ->  None:
+        self._exec("DELETE FROM Tag WHERE id=?",(tid,))
+        self.connection.commit()
     def get_tag_info(self, tid: TagID) -> TagMetadata | None:
-        output = self.exec("SELECT num_id,id,long_name FROM Tag WHERE id=?",(tid,))
+        output = self._exec("SELECT num_id,id,long_name FROM Tag WHERE id=?",(tid,))
         if len(output) == 0:
             return None
         return TagMetadata(
@@ -443,49 +461,48 @@ class Database:
             id=TagID(output[0][1]),
             long_name=output[0][2]
         )
-    def create_tag(self, tid: TagID, description: str) -> TagNumID:
-        db_out = self.exec(
-            "INSERT INTO Tag(id,description) VALUES (?,?) RETURNING (num_id)",(
-            tid,description))
-        self.connection.commit()
-        return TagNumID(db_out[0][0])
-    def delete_tag(self, tid: TagID) ->  None:
-        self.exec("DELETE FROM Tag WHERE id=?",(tid,))
-        self.connection.commit()
-
-    def add_tag_to_video(self, tnumid: TagNumID | None, vnumid: VideoNumID | None) -> bool:
-        if tnumid is None or vnumid is None:
-            return False
-        self.exec(
-            "INSERT OR REPLACE INTO TaggedVideo(tag_id,video_id) VALUES (?,?)",
-            (tnumid, vnumid))
-        self.connection.commit()
-        return True
-    def add_tag_to_playlist(self, tnumid: TagNumID | None, pnumid: PlaylistNumID | None) -> bool:
-        if tnumid is None or pnumid is None:
-            return False
-        self.exec(
-            "INSERT OR REPLACE INTO TaggedPlaylist(tag_id,playlist_id) VALUES (?,?)",
-            (tnumid,pnumid))
-        self.connection.commit()
-        return True
-
-    def get_video_tags(self, vid: VideoID | None) -> list[TagNumID]:
-        return [
-            TagNumID(x[0]) for x in
-            self.exec("SELECT tag_id FROM TaggedVideo WHERE video_id = ?", (self.get_vnumid(vid),))
-        ]
-    def get_playlist_tags(self, pid: PlaylistID) -> list[TagNumID]:
-        return [
-            TagNumID(x[0]) for x in
-            self.exec(
-                "SELECT tag_id FROM TaggedPlaylist WHERE playlist_id = ?",
-                (self.get_pnumid(pid),)
-            )
-        ]
+    def add_tag(self, tid: TagID, item: VideoID | PlaylistID) -> bool:
+        tnumid = self.get_tnumid(tid)
+        match item:
+            case VideoID():
+                vnumid = self.get_vnumid(item)
+                if tnumid is None or vnumid is None:
+                    return False
+                self._exec(
+                    "INSERT OR REPLACE INTO TaggedVideo(tag_id,video_id) VALUES (?,?)",
+                    (tnumid, vnumid))
+                self.connection.commit()
+                return True
+            case PlaylistID():
+                pnumid = self.get_pnumid(item)
+                if tnumid is None or pnumid is None:
+                    return False
+                self._exec(
+                    "INSERT OR REPLACE INTO TaggedPlaylist(tag_id,playlist_id) VALUES (?,?)",
+                    (tnumid,pnumid))
+                self.connection.commit()
+                return True
+    def get_tags(self, item: VideoID | PlaylistID) -> list[TagNumID]:
+        match item:
+            case VideoID():
+                return [
+                    TagNumID(x[0]) for x in
+                    self._exec(
+                        "SELECT tag_id FROM TaggedVideo WHERE video_id = ?",
+                        (self.get_vnumid(item),)
+                    )
+                ]
+            case PlaylistID():
+                return [
+                    TagNumID(x[0]) for x in
+                    self._exec(
+                        "SELECT tag_id FROM TaggedPlaylist WHERE playlist_id = ?",
+                        (self.get_pnumid(item),)
+                    )
+                ]
 
     def remove_video(self, vid: VideoID) -> None:
-        self.exec("DELETE FROM Video WHERE id=?", (vid,))
+        self._exec("DELETE FROM Video WHERE id=?", (vid,))
         self.connection.commit()
 
     def exit(self) -> None:
