@@ -4,7 +4,7 @@ from typing import Any, cast
 
 import yt_dlp # type: ignore
 
-from media_filesystem import MediaFilesystem
+from media_filesystem import MediaFilesystem, StorageClass
 from datatypes import VideoID
 
 CONCURRENT_THREADS = 8
@@ -71,11 +71,11 @@ def ytdlp_download_video(media_fs: MediaFilesystem, vid: VideoID, max_res: int |
             print("Invalid PO Token")
 
     dl = yt_dlp.YoutubeDL(parameters)
-    info: InfoDict | None = dl.extract_info(str(vid),download=not media_fs.video_exists(vid))
+    info: InfoDict | None = dl.extract_info(str(vid),download=(media_fs.video_status(vid) == StorageClass.OFFLINE))
     if info is None or info["is_live"] is True:
         return None
 
-    if not media_fs.video_exists(vid):
+    if media_fs.video_status(vid) == StorageClass.OFFLINE: 
         src_file = f"/tmp/video_dl_{vid}.mkv"
         if not os.path.isfile(src_file):
             raise IOError("Error downloading video")

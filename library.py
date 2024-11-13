@@ -7,7 +7,7 @@ from dbconnection import Database
 from datatypes import VideoID, PlaylistID
 from datatypes import ChannelHandle, ChannelUUID, TagID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata
-from media_filesystem import MediaFilesystem
+from media_filesystem import MediaFilesystem, StorageClass
 
 zero_tag = TagNumID(0)
 
@@ -34,8 +34,11 @@ class Library:
 
     def download_thumbnail(self, video: VideoID) -> None:
         fileloc = f"/tmp/thumb.{video}.jpg"
-        if self.media_fs.thumbnail_exists(video):
-            return
+        match self.media_fs.thumbnail_status(video):
+            case StorageClass.LOCAL | StorageClass.REMOTE:
+                return
+            case StorageClass.OFFLINE:
+                pass
         download_paths: list[tuple[str,str|None]] = [
             (f"https://i.ytimg.com/vi/{video}/maxresdefault.jpg",None),
             (f"https://i.ytimg.com/vi/{video}/hq720.jpg",None),
@@ -72,7 +75,7 @@ class Library:
         m3ustring = "#EXTM3U\n#EXTENC:UTF-8\n"
         m3ustring += f"#PLAYLIST:{data.title}\n"
         for item in (list(reversed(data.entries)) if invert else data.entries):
-            m3ustring+=f"#EXTINF:{item.duration},{item.title}\n{self.media_fs.get_video_url(item.id)}\n"
+            m3ustring+=f"#EXTINF:{item.duration},{item.title}\n{self.media_fs.get_video_url(item.id,False)}\n"
         return m3ustring
 
     def create_tag(self, tag: TagID, description: str) -> None:

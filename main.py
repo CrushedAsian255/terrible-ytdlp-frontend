@@ -10,7 +10,7 @@ from library import Library
 from datatypes import VideoID, PlaylistID
 from datatypes import ChannelHandle, ChannelUUID, TagID
 from datatypes import VideoMetadata, PlaylistMetadata
-from media_filesystem import MediaFilesystem, LocalFilesystem, AWSFilesystem
+from media_filesystem import *
 
 def get_item_fzf(items: list[str]) -> str | None:
     with subprocess.Popen(
@@ -78,14 +78,17 @@ def pick_content_fzf(
         pass
     raise ValueError(x)
 
-def parse_custom_media_fs(media_handle: str) -> MediaFilesystem:
+def parse_custom_media_fs(media_handle: str, library_path: str) -> MediaFilesystem:
     split_handle = media_handle.split(":")
     match split_handle[0]:
         case "s3":
             if len(split_handle) > 2:
                 return AWSFilesystem(split_handle[1],split_handle[2])
-            else:
-                return AWSFilesystem(split_handle[1],None)
+            return AWSFilesystem(split_handle[1],None)
+        case "s3cache":
+            if len(split_handle) > 2:
+                return CacheAWSFilesystem(library_path,split_handle[1],split_handle[2])
+                return CacheAWSFilesystem(library_path,split_handle[1],None)
         case _:
             return LocalFilesystem(media_handle)
 
@@ -141,7 +144,7 @@ def parse_command(
                     if tag:
                         lib.add_tag(tag,content_id)
                     if auxiliary:
-                        open_mpv(lib.media_fs.get_video_url(content_id))
+                        open_mpv(lib.media_fs.get_video_url(content_id,False))
                 case PlaylistID():
                     lib.download_playlist(content_id)
                     if tag:
@@ -186,7 +189,7 @@ def parse_command(
                 )
             match content_id:
                 case VideoID():
-                    open_mpv(lib.media_fs.get_video_url(content_id))
+                    open_mpv(lib.media_fs.get_video_url(content_id,True))
                 case PlaylistID():
                     open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
         case 'play-v':
@@ -202,9 +205,9 @@ def parse_command(
                 content_id = pick_video_fzf(lib.get_all_videos(tag))
             if content_id is not None:
                 if auxiliary:
-                    print(lib.media_fs.get_video_url(content_id))
+                    print(lib.media_fs.get_video_url(content_id,False))
                 else:
-                    open_mpv(lib.media_fs.get_video_url(content_id))
+                    open_mpv(lib.media_fs.get_video_url(content_id,False))
         case 'play-pl':
             if url:
                 content_id = infer_type(url)
@@ -276,18 +279,18 @@ def main() -> None:
     
     custom_media_handle: str | None = None
     try:
-        with open(f"{bpath}/{args.library}","r", encoding="utf-8") as f:
+        with open(f"{library_path}.ext","r", encoding="utf-8") as f:
             custom_media_handle = f.read()
     except (FileNotFoundError, IsADirectoryError):
         pass
 
     if args.media_handle:
         custom_media_handle = args.media_handle
-        with open(f"{bpath}/{args.library}","w", encoding="utf-8") as f:
+        with open(f"{library_path}.ext","w", encoding="utf-8") as f:
             f.write(custom_media_handle)
 
     if custom_media_handle:
-        media_fs = parse_custom_media_fs(custom_media_handle)
+        media_fs = parse_custom_media_fs(custom_media_handle,library_path)
     else:
         media_fs = LocalFilesystem(library_path)
 
