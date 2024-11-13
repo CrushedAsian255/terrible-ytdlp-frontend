@@ -116,78 +116,6 @@ class LocalFilesystem(MediaFilesystem):
         pass
 
 class AWSFilesystem(MediaFilesystem):
-    def _filename(self, vid: VideoID) -> str:
-        return f"{self.prefix}{vid.value}.mkv"
-    def _thumbnail_filename(self, vid: VideoID) -> str:
-        return f"{self.prefix}{vid.value}.jpg"
-    def __init__(self, bucket_name: str, prefix: str | None):
-        self.s3 = boto3.resource(
-            service_name="s3",
-            endpoint_url=os.getenv("AWS_ENDPOINT_URL"),
-            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-            config = Config(signature_version='s3v4')
-        )
-        self.bucket_name = bucket_name
-        self.prefix = "" if prefix is None else f"{prefix}/"
-        self.uploaded = 0
-        self.total = 0
-    def _upload_callback(self, size):
-        self.uploaded += size
-        print(
-            f"Uploading file: {convert_file_size(self.uploaded)} / {convert_file_size(self.total)}, "
-            f"{self.uploaded*100/self.total:.01f}%",end="\r"
-        )
-    def write_video(self, vid: VideoID, src_path: str) -> bool:
-        self.total = os.stat(src_path).st_size
-        self.uploaded = 0
-        print("Uploading file",end="\r")
-        self.s3.Bucket(self.bucket_name).upload_file(src_path, self._filename(vid),Callback=self._upload_callback)
-        print("\nUploaded!")
-    def get_video_url(self, vid: VideoID, force_download: bool) -> str:
-        if force_download:
-            raise ValueError()
-        return self.s3.meta.client.generate_presigned_url(
-            ClientMethod='get_object',
-            ExpiresIn=AWS_URL_KEEPALIVE,
-            Params={'Bucket': self.bucket_name,'Key': self._filename(vid)}
-        )
-    def video_status(self, vid: VideoID) -> StorageClass:
-        try:
-            obj = self.s3.meta.client.head_object(Bucket=self.bucket_name, Key=self._filename(vid))
-            return StorageClass.REMOTE
-        except ClientError as exc:
-            if exc.response['Error']['Code'] == '404':
-                return StorageClass.OFFLINE
-            raise ValueError()
-    def video_cached(self, vod: VideoID) -> bool:
-        return None
-    def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
-        print("Uploading thumbnail")
-        self.s3.Bucket(self.bucket_name).upload_file(src_path, self._thumbnail_filename(vid))
-        print("Uploaded!")
-    def get_thumbnail_url(self, vid: VideoID) -> str:
-        return self.s3.meta.client.generate_presigned_url(
-            ClientMethod='get_object',
-            ExpiresIn=AWS_URL_KEEPALIVE,
-            Params={'Bucket': self.bucket_name,'Key': self._thumbnail_filename(vid)}
-        )
-    def thumbnail_status(self, vid: VideoID) -> StorageClass:
-        try:
-            obj = self.s3.meta.client.head_object(Bucket=self.bucket_name, Key=self._thumbnail_filename(vid))
-            return StorageClass.REMOTE
-        except ClientError as exc:
-            if exc.response['Error']['Code'] == '404':
-                return StorageClass.LOCAL
-            raise ValueError()
-    def delete_video(self, vid: VideoID):
-        raise NotImplementedError()
-    def list_all_videos(self) -> list[VideoID]:
-        raise NotImplementedError()
-    def integrity_check(self) -> None:
-        pass
-
-class CacheAWSFilesystem(MediaFilesystem):
     def _foldername(self, vid: VideoID) -> str:
         return f"{self.path}/{ord(vid.value[0])-32}/{ord(vid.value[1])-32}"
     def _filename(self, vid: VideoID) -> str:
@@ -240,6 +168,24 @@ class CacheAWSFilesystem(MediaFilesystem):
         end = time.perf_counter_ns()
         print(f"\nEnumerated {len(videos_list)} videos in {(end-start)/1_000_000_000:.2f} seconds")
         return videos_list
+    def _aws_content_list(self) -> dict[VideoID,list[int | None]]:
+        response = self.s3.meta.client.list_objects_v2(Bucket=self.bucket_name,Prefix=self.prefix)
+        content_list = response['Contents']
+        while response['IsTruncated']:
+            response = self.s3.meta.client.list_objects_v2(Bucket=self.bucket_name,Prefix=self.prefix,ContinuationToken=response['NextContinuationToken'])
+            content_list += response['Contents']
+        videos: list[tuple[VideoID,int]] = [(x['Key'][-15:-4],x['Size']) for x in content_list if x['Key'][-4:] == '.mkv']
+        thumbnails: list[tuple[VideoID,int]] = [(x['Key'][-15:-4],x['Size']) for x in content_list if x['Key'][-4:] == '.jpg']
+        output = {}
+        for vid,size in videos:
+            if vid not in output:
+                output[vid] = [None,None]
+            output[vid][0]=size
+        for vid,size in thumbnails:
+            if vid not in output:
+                output[vid] = [None,None]
+            output[vid][1]=size
+        return output
 
     def __init__(self, local_path: str, bucket_name: str, prefix: str | None):
         self.s3 = boto3.resource(
@@ -329,12 +275,13 @@ class CacheAWSFilesystem(MediaFilesystem):
         raise NotImplementedError()
     def integrity_check(self) -> None:
         videos = self._local_video_list()
+        aws_videos = self._aws_content_list()
         print(f"Total video count: {len(videos)}")
         for vid in videos:
-            local_file = self._filename(vid)
-            local_size = os.stat(local_file).st_size
-            remote_file = self._aws_filename(vid)
-            remote_size = None
+            local_video = self._filename(vid)
+            local_video_size = os.stat(local_file).st_size
+            remote_video = self._aws_filename(vid)
+            
             try:
                 obj = self.s3.meta.client.head_object(Bucket=self.bucket_name, Key=remote_file)
                 remote_size = obj['ContentLength']
