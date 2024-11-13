@@ -286,8 +286,6 @@ class AWSFilesystem(MediaFilesystem):
         for vid in database_videos:
             local_video = self._filename(vid)
             if not self._local_video_exists(vid):
-                print(f"ERROR: Missing video: {vid}")
-            else:
                 local_video_size = os.stat(local_video).st_size
                 if vid not in aws_videos or aws_videos[vid][0] != local_video_size:
                     remote_video = self._aws_filename(vid)
@@ -296,12 +294,16 @@ class AWSFilesystem(MediaFilesystem):
                     self.uploaded = 0
                     self.s3.Bucket(self.bucket_name).upload_file(local_video, remote_video, Callback=self._upload_callback)
                     print("")
-            if not self._local_thumbnail_exists(vid):
-                print(f"ERROR: Missing thumbnail: {vid}")
             else:
+                if vid not in aws_videos or aws_videos[vid][0] == None:
+                    print(f"ERROR: Missing video: {vid}")    
+            if self._local_thumbnail_exists(vid):
                 local_thumbnail = self._thumbnail_filename(vid)
                 local_thumbnail_size = os.stat(local_thumbnail).st_size
                 if vid not in aws_videos or aws_videos[vid][1] != local_thumbnail_size:
                     remote_thumbnail = self._aws_thumbnail_filename(vid)
-                    print(f"Uploading thunbnail {vid}")
+                    print(f"Uploading thumbnail {vid}")
                     self.s3.Bucket(self.bucket_name).upload_file(local_thumbnail, remote_thumbnail)
+            else:
+                if vid not in aws_videos or aws_videos[vid][1] == None:
+                    print(f"ERROR: Missing video: {vid}")
