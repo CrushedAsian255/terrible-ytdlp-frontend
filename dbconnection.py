@@ -212,12 +212,12 @@ class Database:
             int(video.epoch),
             video.channel_id
         ))
-        self.connection.commit()
         if add_tag:
             self._exec(
                 "INSERT OR REPLACE INTO TaggedVideo(tag_id,video_id) VALUES (0,?)",
                 (db_out[0][0],)
             )
+        self.connection.commit()
         return cast(VideoNumID,db_out[0][0])
 
     def get_playlist_info(self, pid: PlaylistID) -> PlaylistMetadata[list[VideoMetadata]] | None:
