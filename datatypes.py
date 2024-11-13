@@ -22,6 +22,8 @@ class VideoID:
         if re.match(r"^[a-zA-Z0-9_-]{11}$",value) is None:
             raise ValueError(f"Error: Invalid VideoID {value}")
         self.value = value
+    def __hash__(self) -> str:
+        return hash(self.value)
 
 class PlaylistID:
     __slots__ = ('value',)

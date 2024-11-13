@@ -37,7 +37,7 @@ class MediaFilesystem:
         raise NotImplementedError()
     def list_all_videos(self) -> list[VideoID]:
         raise NotImplementedError()
-    def integrity_check(self) -> None:
+    def integrity_check(self, database_videos: list[VideoID]) -> None:
         raise NotImplementedError()
 
 class LocalFilesystem(MediaFilesystem):
@@ -112,8 +112,14 @@ class LocalFilesystem(MediaFilesystem):
         end = time.perf_counter_ns()
         print(f"\nEnumerated {len(videos_list)} videos in {(end-start)/1_000_000_000:.2f} seconds")
         return videos_list
-    def integrity_check(self) -> None:
-        pass
+    def integrity_check(self, database_videos: list[VideoID]) -> None:
+        filesystem_videos: list[VideoID] = self.list_all_videos()
+        for vid in filesystem_videos:
+            if vid not in database_videos:
+                print(f"Orphaned file: {vid}")
+        for vid in database_videos:
+            if vid not in filesystem_videos:
+                print(f"ERROR: Missing file: {vid}")
 
 class AWSFilesystem(MediaFilesystem):
     def _foldername(self, vid: VideoID) -> str:
@@ -174,8 +180,8 @@ class AWSFilesystem(MediaFilesystem):
         while response['IsTruncated']:
             response = self.s3.meta.client.list_objects_v2(Bucket=self.bucket_name,Prefix=self.prefix,ContinuationToken=response['NextContinuationToken'])
             content_list += response['Contents']
-        videos: list[tuple[VideoID,int]] = [(x['Key'][-15:-4],x['Size']) for x in content_list if x['Key'][-4:] == '.mkv']
-        thumbnails: list[tuple[VideoID,int]] = [(x['Key'][-15:-4],x['Size']) for x in content_list if x['Key'][-4:] == '.jpg']
+        videos: list[tuple[VideoID,int]] = [(VideoID(x['Key'][-15:-4]),x['Size']) for x in content_list if x['Key'][-4:] == '.mkv']
+        thumbnails: list[tuple[VideoID,int]] = [(VideoID(x['Key'][-15:-4]),x['Size']) for x in content_list if x['Key'][-4:] == '.jpg']
         output = {}
         for vid,size in videos:
             if vid not in output:
@@ -273,26 +279,29 @@ class AWSFilesystem(MediaFilesystem):
         raise NotImplementedError()
     def list_all_videos(self) -> list[VideoID]:
         raise NotImplementedError()
-    def integrity_check(self) -> None:
-        videos = self._local_video_list()
+    def integrity_check(self, database_videos: list[VideoID]) -> None:
         aws_videos = self._aws_content_list()
-        print(f"Total video count: {len(videos)}")
-        for vid in videos:
+        print(f"Total database video count: {len(database_videos)}")
+        print(f"Total AWS video count: {len(aws_videos)}")
+        for vid in database_videos:
             local_video = self._filename(vid)
-            local_video_size = os.stat(local_file).st_size
-            remote_video = self._aws_filename(vid)
-            
-            try:
-                obj = self.s3.meta.client.head_object(Bucket=self.bucket_name, Key=remote_file)
-                remote_size = obj['ContentLength']
-                if remote_size != local_size:
-                    print(f"Error: unfinished upload for video {vid} to AWS, reuploading")
-            except ClientError as exc:
-                if exc.response['Error']['Code'] != '404':
-                    raise ValueError()
-            if local_size != remote_size:
-                print(f"Uploading file {vid}")
-                self.total = local_size
-                self.uploaded = 0
-                self.s3.Bucket(self.bucket_name).upload_file(local_file, remote_file, Callback=self._upload_callback)
-                print("")
+            if not self._local_video_exists(vid):
+                print(f"ERROR: Missing video: {vid}")
+            else:
+                local_video_size = os.stat(local_video).st_size
+                if vid not in aws_videos or aws_videos[vid][0] != local_video_size:
+                    remote_video = self._aws_filename(vid)
+                    print(f"Uploading video {vid}")
+                    self.total = local_video_size
+                    self.uploaded = 0
+                    self.s3.Bucket(self.bucket_name).upload_file(local_video, remote_video, Callback=self._upload_callback)
+                    print("")
+            if not self._local_thumbnail_exists(vid):
+                print(f"ERROR: Missing thumbnail: {vid}")
+            else:
+                local_thumbnail = self._thumbnail_filename(vid)
+                local_thumbnail_size = os.stat(local_thumbnail).st_size
+                if vid not in aws_videos or aws_videos[vid][1] != local_thumbnail_size:
+                    remote_thumbnail = self._aws_thumbnail_filename(vid)
+                    print(f"Uploading thunbnail {vid}")
+                    self.s3.Bucket(self.bucket_name).upload_file(local_thumbnail, remote_thumbnail)

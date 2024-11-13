@@ -234,17 +234,6 @@ class Library:
         return count
 
     def integrity_check(self) -> None:
+        database_videos: list[VideoID] = [x.id for x in self.get_all_videos()]
         print(self.media_fs)
-        self.media_fs.integrity_check()
-        videos_filesystem: list[VideoID] = self.media_fs.list_all_videos()
-        videos_database: list[VideoID] = [x.id for x in self.get_all_videos()]
-        for vid in videos_filesystem:
-            if vid not in videos_database:
-                print(f"Orphaned file: {vid}")
-        for vid in videos_database:
-            if vid not in videos_filesystem:
-                print(f"ERROR: Missing file: {vid}")
-            video_tags = len(self.db.get_tags(vid))
-            video_playlists = len(self.db.get_video_playlists(vid))
-            if video_tags == 0 and video_playlists == 0:
-                print(f"Orphaned video: {vid}")
+        self.media_fs.integrity_check(database_videos)
