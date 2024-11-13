@@ -88,7 +88,7 @@ def parse_custom_media_fs(media_handle: str, library_path: str) -> MediaFilesyst
         case "s3cache":
             if len(split_handle) > 2:
                 return CacheAWSFilesystem(library_path,split_handle[1],split_handle[2])
-                return CacheAWSFilesystem(library_path,split_handle[1],None)
+            return CacheAWSFilesystem(library_path,split_handle[1],None)
         case _:
             return LocalFilesystem(media_handle)
 

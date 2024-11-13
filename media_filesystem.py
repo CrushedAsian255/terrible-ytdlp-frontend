@@ -25,6 +25,8 @@ class MediaFilesystem:
         raise NotImplementedError()
     def video_status(self, vid: VideoID) -> StorageClass:
         raise NotImplementedError()
+    def video_cached(self, vod: VideoID) -> bool:
+        raise NotImplementedError()
     def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
         raise NotImplementedError()
     def get_thumbnail_url(self, vid: VideoID) -> str:
@@ -34,6 +36,8 @@ class MediaFilesystem:
     def delete_video(self, vid: VideoID):
         raise NotImplementedError()
     def list_all_videos(self) -> list[VideoID]:
+        raise NotImplementedError()
+    def integrity_check(self) -> None:
         raise NotImplementedError()
 
 class LocalFilesystem(MediaFilesystem):
@@ -75,6 +79,8 @@ class LocalFilesystem(MediaFilesystem):
         return self._filename(vid)
     def video_status(self, vid: VideoID) -> StorageClass:
         return StorageClass.LOCAL if os.path.isfile(self._filename(vid)) else StorageClass.OFFLINE
+    def video_cached(self, vod: VideoID) -> bool:
+        return None
     def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
         os.makedirs(self._thumbnail_foldername(vid), exist_ok=True)
         shutil.copyfile(src_path,self._thumbnail_filename(vid))
@@ -82,7 +88,7 @@ class LocalFilesystem(MediaFilesystem):
     def get_thumbnail_url(self, vid: VideoID) -> str:
         return self._thumbnail_filename(vid)
     def thumbnail_status(self, vid: VideoID) -> StorageClass:
-        return StorageClass.LOCAL if os.path.isfile(self._thumbnail_filename(vid)) else StorageCLASS.OFFLINE
+        return StorageClass.LOCAL if os.path.isfile(self._thumbnail_filename(vid)) else StorageClass.OFFLINE
     def delete_video(self, vid: VideoID):
         os.remove(self._filename(vid))
         os.remove(self._thumbnail_filename(vid))
@@ -106,6 +112,8 @@ class LocalFilesystem(MediaFilesystem):
         end = time.perf_counter_ns()
         print(f"\nEnumerated {len(videos_list)} videos in {(end-start)/1_000_000_000:.2f} seconds")
         return videos_list
+    def integrity_check(self) -> None:
+        pass
 
 class AWSFilesystem(MediaFilesystem):
     def _filename(self, vid: VideoID) -> str:
@@ -152,6 +160,8 @@ class AWSFilesystem(MediaFilesystem):
             if exc.response['Error']['Code'] == '404':
                 return StorageClass.OFFLINE
             raise ValueError()
+    def video_cached(self, vod: VideoID) -> bool:
+        return None
     def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
         print("Uploading thumbnail")
         self.s3.Bucket(self.bucket_name).upload_file(src_path, self._thumbnail_filename(vid))
@@ -174,6 +184,8 @@ class AWSFilesystem(MediaFilesystem):
         raise NotImplementedError()
     def list_all_videos(self) -> list[VideoID]:
         raise NotImplementedError()
+    def integrity_check(self) -> None:
+        pass
 
 class CacheAWSFilesystem(MediaFilesystem):
     def _foldername(self, vid: VideoID) -> str:
@@ -208,7 +220,27 @@ class CacheAWSFilesystem(MediaFilesystem):
             if exc.response['Error']['Code'] == '404':
                 return False
             raise ValueError()
-    
+    def _local_video_list(self) -> list[VideoID]:
+        start = time.perf_counter_ns()
+        videos_list = []
+        dir0list = [x for x in os.scandir(self.path) if x.is_dir() and x.name != "thumbs"]
+        for dir0idx, dir0item in enumerate(dir0list):
+            dir1list = [x for x in os.scandir(dir0item) if x.is_dir()]
+            for dir1item in dir1list:
+                dir2list = [
+                    VideoID(x.name[:-4]) for x in
+                    os.scandir(dir1item)
+                    if not x.is_dir() and x.name[-4:]=='.mkv' and x.name[0] != "."
+                ]
+                videos_list += dir2list
+            print(
+                f"Enumerating directories: {dir0idx+1} / {len(dir0list)} "
+                f"({len(videos_list)} items)",end="\r"
+            )
+        end = time.perf_counter_ns()
+        print(f"\nEnumerated {len(videos_list)} videos in {(end-start)/1_000_000_000:.2f} seconds")
+        return videos_list
+
     def __init__(self, local_path: str, bucket_name: str, prefix: str | None):
         self.s3 = boto3.resource(
             service_name="s3",
@@ -252,6 +284,7 @@ class CacheAWSFilesystem(MediaFilesystem):
             try:
                 obj = self.s3.meta.client.head_object(Bucket=self.bucket_name, Key=self._aws_filename(vid))
                 self.total = obj['ContentLength']
+                self.uploaded = 0
             except ClientError as exc:
                 raise ValueError()
             self.s3.Bucket(self.bucket_name).download_file(self._aws_filename(vid),self._filename(vid),Callback=self._download_callback)
@@ -267,6 +300,8 @@ class CacheAWSFilesystem(MediaFilesystem):
         if self._aws_video_exists(vid):
             return StorageClass.REMOTE
         return StorageClass.OFFLINE
+    def video_cached(self, vod: VideoID) -> bool:
+        return self._local_video_exists(vid)
     def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
         print("Moving locally")
         os.makedirs(self._thumbnail_foldername(vid), exist_ok=True)
@@ -292,3 +327,25 @@ class CacheAWSFilesystem(MediaFilesystem):
         raise NotImplementedError()
     def list_all_videos(self) -> list[VideoID]:
         raise NotImplementedError()
+    def integrity_check(self) -> None:
+        videos = self._local_video_list()
+        print(f"Total video count: {len(videos)}")
+        for vid in videos:
+            local_file = self._filename(vid)
+            local_size = os.stat(local_file).st_size
+            remote_file = self._aws_filename(vid)
+            remote_size = None
+            try:
+                obj = self.s3.meta.client.head_object(Bucket=self.bucket_name, Key=remote_file)
+                remote_size = obj['ContentLength']
+                if remote_size != local_size:
+                    print(f"Error: unfinished upload for video {vid} to AWS, reuploading")
+            except ClientError as exc:
+                if exc.response['Error']['Code'] != '404':
+                    raise ValueError()
+            if local_size != remote_size:
+                print(f"Uploading file {vid}")
+                self.total = local_size
+                self.uploaded = 0
+                self.s3.Bucket(self.bucket_name).upload_file(local_file, remote_file, Callback=self._upload_callback)
+                print("")

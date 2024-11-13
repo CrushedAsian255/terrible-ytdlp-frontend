@@ -234,6 +234,8 @@ class Library:
         return count
 
     def integrity_check(self) -> None:
+        print(self.media_fs)
+        self.media_fs.integrity_check()
         videos_filesystem: list[VideoID] = self.media_fs.list_all_videos()
         videos_database: list[VideoID] = [x.id for x in self.get_all_videos()]
         for vid in videos_filesystem:
