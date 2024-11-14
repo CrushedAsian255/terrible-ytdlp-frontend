@@ -277,11 +277,11 @@ class Database:
                 '''INSERT INTO Pointer(playlist_id, video_id, position)
                 VALUES (?,(SELECT num_id FROM Video WHERE id=?),?)''',(pnumid,x[1],x[0])
             )
-        self.connection.commit()
         self._exec(
             "INSERT OR REPLACE INTO TaggedPlaylist(tag_id,playlist_id) VALUES (0,?)",
             (pnumid,)
         )
+        self.connection.commit()
         return PlaylistNumID(db_out[0][0])
 
     def get_channel_info(self, cid: ChannelUUID | ChannelHandle) -> ChannelMetadata | None:
