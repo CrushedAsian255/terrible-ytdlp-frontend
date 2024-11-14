@@ -129,7 +129,7 @@ def parse_command(
     content_id = None
     lib.write_log("command",f"{command} {url}")
     match command:
-        case 'download':
+        case 'download' | 'dl':
             if not url:
                 print("Error: No URL given")
                 return
@@ -218,10 +218,6 @@ def parse_command(
             open_mpv(lib.create_playlist_m3u8(content_id,auxiliary))
         case 'check':
             lib.integrity_check()
-        case 'prune':
-            lib.prune()
-        case 'purge':
-            lib.purge()
         case 'update-thumbs':
             lib.update_thumbnails()
 

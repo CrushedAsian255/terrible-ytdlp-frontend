@@ -217,23 +217,13 @@ class Library:
                 epoch=data['epoch']
             ))
 
-    def prune(self) -> None:
+    def integrity_check(self) -> None:
         for db_vid in [x.id for x in self.get_all_videos()]:
             video_tags = len(self.db.get_tags(db_vid))
             video_playlists = len(self.db.get_video_playlists(db_vid))
             if video_tags == 0 and video_playlists == 0:
-                print(f"Removing orphaned video: {db_vid}")
+                print(f"Orphaned video: {db_vid}")
                 self.db.remove_video(db_vid)
-
-    def purge(self) -> int:
-        videos_database = [x.id for x in self.get_all_videos()]
-        count = 0
-        for fs_vid in self.media_fs.list_all_videos():
-            if fs_vid not in videos_database:
-                self.media_fs.delete_video(fs_vid)
-        return count
-
-    def integrity_check(self) -> None:
         database_videos: list[VideoID] = [x.id for x in self.get_all_videos()]
         print(self.media_fs)
         self.media_fs.integrity_check(database_videos)

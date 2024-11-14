@@ -285,7 +285,7 @@ class AWSFilesystem(MediaFilesystem):
         print(f"Total AWS video count: {len(aws_videos)}")
         for vid in database_videos:
             local_video = self._filename(vid)
-            if not self._local_video_exists(vid):
+            if self._local_video_exists(vid):
                 local_video_size = os.stat(local_video).st_size
                 if vid not in aws_videos or aws_videos[vid][0] != local_video_size:
                     remote_video = self._aws_filename(vid)

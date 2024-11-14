@@ -113,7 +113,6 @@ class Database:
             epoch INTEGER NOT NULL,
 
             channel_id INTEGER NOT NULL,
-            following INTEGER NOT NULL DEFAULT 0,
             removed INTEGER NOT NULL DEFAULT 0,
             aux_data TEXT,
             FOREIGN KEY (channel_id) REFERENCES Channel(num_id)
