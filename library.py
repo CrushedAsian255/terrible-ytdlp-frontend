@@ -223,7 +223,6 @@ class Library:
             video_playlists = len(self.db.get_video_playlists(db_vid))
             if video_tags == 0 and video_playlists == 0:
                 print(f"Orphaned video: {db_vid}")
-                self.db.remove_video(db_vid)
         database_videos: list[VideoID] = [x.id for x in self.get_all_videos()]
         print(self.media_fs)
         self.media_fs.integrity_check(database_videos)
