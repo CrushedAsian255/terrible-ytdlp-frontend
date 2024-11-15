@@ -198,10 +198,17 @@ class Database:
         )
     def write_video_info(self, video: VideoMetadata, add_tag: bool) -> VideoNumID:
         db_out = self._exec('''
-        INSERT OR REPLACE INTO Video(id,title,description,upload_timestamp,duration,epoch,channel_id)
+        INSERT INTO Video(id,title,description,upload_timestamp,duration,epoch,channel_id)
         VALUES (
             ?,?,?,?,?,?,
             (SELECT num_id FROM Channel WHERE id=?)
+        ON CONFLICT DO UPDATE SET  
+            title=excluded.title,
+            description=excluded.description,
+            upload_timestamp=excluded.upload_timestamp,
+            duration=excluded.duration,
+            epoch=excluded.epoch,
+            channel_id=excluded.channel_id
         ) RETURNING (num_id)
         ''',(video.id,
             video.title,
@@ -262,8 +269,15 @@ class Database:
         )
     def write_playlist_info(self, playlist: PlaylistMetadata[list[VideoID]]) -> PlaylistNumID:
         db_out = self._exec(
-            '''INSERT OR REPLACE INTO Playlist(id,title,description,epoch,count,channel_id)
-            VALUES (?,?,?,?,?,(SELECT num_id FROM Channel WHERE id=?)) RETURNING (num_id)''',
+            '''INSERT INTO Playlist(id,title,description,epoch,count,channel_id)
+            VALUES (?,?,?,?,?,(SELECT num_id FROM Channel WHERE id=?))
+            ON CONFLICT DO UPDATE SET  
+                title=excluded.title,
+                description=excluded.description,
+                epoch=excluded.epoch,
+                count=excluded.count,
+                channel_id=excluded.channel_id
+            RETURNING (num_id)''',
             (
                 playlist.id, playlist.title, playlist.description, int(playlist.epoch),
                 playlist.entry_count, playlist.channel_id
@@ -275,7 +289,7 @@ class Database:
             self._exec(
                 '''INSERT INTO Pointer(playlist_id, video_id, position)
                 VALUES (?,(SELECT num_id FROM Video WHERE id=?),?)''',(pnumid,x[1],x[0])
-            )
+            ) 
         self._exec(
             "INSERT OR REPLACE INTO TaggedPlaylist(tag_id,playlist_id) VALUES (0,?)",
             (pnumid,)
@@ -319,7 +333,12 @@ class Database:
                 )
     def write_channel_info(self, channel: ChannelMetadata) -> None:
         self._exec(
-            "INSERT OR REPLACE INTO Channel(id,handle,title,description,epoch) VALUES (?,?,?,?,?)",
+            '''INSERT INTO Channel(id,handle,title,description,epoch) VALUES (?,?,?,?,?)
+            ON CONFLICT DO UPDATE SET  
+                handle=excluded.handle,
+                title=excluded.title,
+                description=excluded.description,
+                epoch=excluded.epoch''',
             (channel.id, channel.handle, channel.title, channel.description, int(channel.epoch))
         )
         self.connection.commit()
