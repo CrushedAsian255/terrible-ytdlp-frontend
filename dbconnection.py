@@ -31,7 +31,7 @@ class Database:
         command = re.sub(r'[\n\t ]+', ' ', sql).strip()
         cmdref=f"{command.split(" ")[0]}:{sum((ord(x)*i)&0x2a for i,x in enumerate(command))&0xff}"
         if self.print_db_log:
-            print(f"[DEBUG] {cmdref} {command} \n{params=}")
+            print(f"--------------------\n[DEBUG] {cmdref} {command} \n{params=}")
         start = time.perf_counter_ns()
         out = self.connection.execute(command, params).fetchall()
         end = time.perf_counter_ns()
