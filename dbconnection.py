@@ -201,7 +201,7 @@ class Database:
         INSERT INTO Video(id,title,description,upload_timestamp,duration,epoch,channel_id)
         VALUES (
             ?,?,?,?,?,?,
-            (SELECT num_id FROM Channel WHERE id=?)
+            (SELECT num_id FROM Channel WHERE id=?))
         ON CONFLICT DO UPDATE SET  
             title=excluded.title,
             description=excluded.description,
@@ -209,7 +209,7 @@ class Database:
             duration=excluded.duration,
             epoch=excluded.epoch,
             channel_id=excluded.channel_id
-        ) RETURNING (num_id)
+        RETURNING (num_id)
         ''',(video.id,
             video.title,
             video.description,

@@ -44,9 +44,9 @@ def ytdlp_download_video(media_fs: MediaFilesystem, vid: VideoID, max_res: int |
             }
         ],
         "format_sort":[
+            f"res{f":{max_res}" if max_res is not None else ""}",
             "vcodec:vp9", # Possibly switch to AV1
-            "acodec:opus",
-            f"res{f":{max_res}" if max_res is not None else ""}"
+            "acodec:opus"
         ]
     }
     if logged_in_path:
