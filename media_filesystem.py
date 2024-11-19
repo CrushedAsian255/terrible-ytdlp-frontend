@@ -37,7 +37,7 @@ class MediaFilesystem:
         raise NotImplementedError()
     def list_all_videos(self) -> list[VideoID]:
         raise NotImplementedError()
-    def integrity_check(self, database_videos: list[VideoID]) -> None:
+    def integrity_check(self, database_videos: list[VideoID], cached_videos: set[VideoID]) -> None:
         raise NotImplementedError()
 
 class LocalFilesystem(MediaFilesystem):
@@ -112,7 +112,7 @@ class LocalFilesystem(MediaFilesystem):
         end = time.perf_counter_ns()
         print(f"\nEnumerated {len(videos_list)} videos in {(end-start)/1_000_000_000:.2f} seconds")
         return videos_list
-    def integrity_check(self, database_videos: list[VideoID]) -> None:
+    def integrity_check(self, database_videos: list[VideoID], cached_videos: set[VideoID]) -> None:
         filesystem_videos: list[VideoID] = self.list_all_videos()
         for vid in filesystem_videos:
             if vid not in database_videos:
@@ -239,6 +239,7 @@ class AWSFilesystem(MediaFilesystem):
                 self.uploaded = 0
             except ClientError as exc:
                 raise ValueError()
+            os.makedirs(self._foldername(vid),exist_ok=True)
             self.s3.Bucket(self.bucket_name).download_file(self._aws_filename(vid),self._filename(vid),Callback=self._download_callback)
             return self._filename(vid)
         return self.s3.meta.client.generate_presigned_url(
@@ -252,7 +253,7 @@ class AWSFilesystem(MediaFilesystem):
         if self._aws_video_exists(vid):
             return StorageClass.REMOTE
         return StorageClass.OFFLINE
-    def video_cached(self, vod: VideoID) -> bool:
+    def video_cached(self, vid: VideoID) -> bool:
         return self._local_video_exists(vid)
     def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
         print("Moving locally")
@@ -279,10 +280,11 @@ class AWSFilesystem(MediaFilesystem):
         raise NotImplementedError()
     def list_all_videos(self) -> list[VideoID]:
         raise NotImplementedError()
-    def integrity_check(self, database_videos: list[VideoID]) -> None:
+    def integrity_check(self, database_videos: list[VideoID], cached_videos: set[VideoID]) -> None:
         aws_videos = self._aws_content_list()
         print(f"Total database video count: {len(database_videos)}")
         print(f"Total AWS video count: {len(aws_videos)}")
+        print(f"Force-cached video count: {len(cached_videos)}")
         for vid in database_videos:
             local_video = self._filename(vid)
             if self._local_video_exists(vid):
@@ -307,3 +309,23 @@ class AWSFilesystem(MediaFilesystem):
             else:
                 if vid not in aws_videos or aws_videos[vid][1] == None:
                     print(f"ERROR: Missing video: {vid}")
+            if vid in cached_videos:
+                if not self.video_cached(vid):
+                    print(f"Caching video: {vid}")
+                    os.makedirs(self._foldername(vid),exist_ok=True)
+                    self.total = aws_videos[vid][0]
+                    self.downloaded = 0
+                    self.s3.meta.client.download_file(
+                        self.bucket_name, self._aws_filename(vid), self._filename(vid),
+                        Callback=self._download_callback,
+                        Config=boto3.s3.transfer.TransferConfig(
+                            multipart_threshold=2**30,
+                            multipart_chunksize=2**30,
+                            use_threads=False
+                        )
+                    )
+                    print()
+            else:
+                if self.video_cached(vid):
+                    print(f"Removing video: {vid}")
+                    os.remove(self._filename(vid))

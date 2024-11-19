@@ -9,8 +9,6 @@ from datatypes import ChannelHandle, ChannelUUID, TagID, TagNumID
 from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata
 from media_filesystem import MediaFilesystem, StorageClass
 
-zero_tag = TagNumID(0)
-
 class Library:
     def __init__(
         self, library_path: str, media_fs: MediaFilesystem,
@@ -217,12 +215,17 @@ class Library:
                 epoch=data['epoch']
             ))
 
+    def _get_cached_content(self) -> list[VideoID]:
+        cached_videos = set()
+        for video in self.db.get_videos([TagNumID(0)]):
+            cached_videos.add(video.id)
+        for playlist in self.db.get_playlists([TagNumID(0)]):
+            for video in self.db.get_playlist_info(playlist.id).entries:
+                cached_videos.add(video.id)
+        return cached_videos
+
     def integrity_check(self) -> None:
-        for db_vid in [x.id for x in self.get_all_videos()]:
-            video_tags = len(self.db.get_tags(db_vid))
-            video_playlists = len(self.db.get_video_playlists(db_vid))
-            if video_tags == 0 and video_playlists == 0:
-                print(f"Orphaned video: {db_vid}")
+        cached_videos = self._get_cached_content()
         database_videos: list[VideoID] = [x.id for x in self.get_all_videos()]
         print(self.media_fs)
-        self.media_fs.integrity_check(database_videos)
+        self.media_fs.integrity_check(database_videos,cached_videos)
