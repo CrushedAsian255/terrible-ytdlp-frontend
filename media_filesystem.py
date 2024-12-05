@@ -327,5 +327,5 @@ class AWSFilesystem(MediaFilesystem):
                     print()
             else:
                 if self.video_cached(vid):
-                    print(f"Removing video: {vid}")
+                    print(f"Evicting video: {vid}")
                     os.remove(self._filename(vid))
