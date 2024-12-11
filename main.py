@@ -244,6 +244,10 @@ def main() -> None:
         dest="print_db_log", action='store_true'
     )
     arg_parser.add_argument(
+        "-x", help="Expect many failures (checks for small thumbnail first)",
+        dest="expect_many_failures", action='store_true'
+    )
+    arg_parser.add_argument(
         "-l", help="Library name",
         dest="library", default='master'
     )
@@ -290,7 +294,7 @@ def main() -> None:
     try_copy(db_path, f"{db_path}.bak")
 
     try:
-        library = Library(library_path,media_fs,args.max_resolution,args.print_db_log)
+        library = Library(library_path,media_fs,args)
     except IOError as e:
         try_copy(f"{db_path}.bak2", f"{db_path}.bak")
         print(f"Error loading database!\n{e}\nAttempting to revert to backup")
@@ -299,7 +303,7 @@ def main() -> None:
             print("Sorry, no backup could be found")
             return
         try:
-            library = Library(library_path,media_fs,args.max_resolution,args.print_db_log)
+            library = Library(library_path,media_fs,args)
         except IOError as e2:
             print(f"Uh oh...\n{e2}\nBackup is also corrupted or none exists. Sorry mate :(")
             return

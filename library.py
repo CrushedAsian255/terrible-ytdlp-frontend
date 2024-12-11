@@ -1,6 +1,7 @@
 import urllib.request
 import urllib.error
 import os
+from argparse import Namespace
 
 from downloader import ytdlp_download_video, ytdlp_download_playlist_metadata
 from dbconnection import Database
@@ -10,19 +11,17 @@ from datatypes import VideoMetadata, PlaylistMetadata, ChannelMetadata
 from media_filesystem import MediaFilesystem, StorageClass
 
 class Library:
-    def __init__(
-        self, library_path: str, media_fs: MediaFilesystem,
-        max_resolution: int | None, print_db_log: bool
-    ):
+    def __init__(self, library_path: str, media_fs: MediaFilesystem, args: Namespace):
+        self.expect_many_failures = args.expect_many_failures
         self.media_fs = media_fs
-        self.db = Database(f"{library_path}.db",print_db_log)
-        self.max_video_resolution = max_resolution
+        self.db = Database(f"{library_path}.db",args.print_db_log)
+        self.max_video_resolution = args.max_resolution
         try:
             os.path.isfile(f"{library_path}.cjar")
             os.path.isfile(f"{library_path}.pot")
             self.login_data_path = library_path
         except (FileNotFoundError, IsADirectoryError):
-            pass
+            self.login_data_path = None
 
     def exit(self) -> None:
         self.db.exit()
@@ -176,6 +175,13 @@ class Library:
     def download_video(self, vid: VideoID, add_tag: bool = True) -> None:
         db_entry = self.db.get_video_info(vid)
         if db_entry is None:
+            if self.expect_many_failures:
+                try:
+                    urllib.request.urlretrieve(f"https://i.ytimg.com/vi/{vid}/default.jpg", f"/tmp/_thumb_tmp_{vid}.jpg")
+                    pass
+                except urllib.error.HTTPError:
+                    print(f"Video {vid} has no basic thumbnail, assuming video non-existant")
+                    return
             self.download_thumbnail(vid)
             video_metadata = ytdlp_download_video(self.media_fs, vid, self.max_video_resolution, None)
             if video_metadata is None and self.login_data_path:
