@@ -1,9 +1,14 @@
-# pylint: disable=too-many-instance-attributes
+"""
+Datatypes that are used throughout the program
+"""
+
+# pylint: disable=too-many-instance-attributes,missing-function-docstring
 import re
 import typing
 from dataclasses import dataclass
 
 class VideoID:
+    """ A video ID, 11 characters of YouTube Base64 """
     __slots__ = ('value',)
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, VideoID):
@@ -26,6 +31,7 @@ class VideoID:
         return hash(self.value)
 
 class PlaylistID:
+    """ A playlist ID, either an actual playlist ID or a channel page """
     __slots__ = ('value',)
     @property
     def url(self) -> str:
@@ -50,6 +56,7 @@ class PlaylistID:
         self.value = value
 
 class ChannelHandle:
+    """ A YouTube channel @handle """
     __slots__ = ('value',)
     @property
     def url(self) -> str:
@@ -69,6 +76,10 @@ class ChannelHandle:
         self.value = value
 
 class TagID:
+    """
+    A Tag name, must be made of letters, numbers, either '-', '_', or '.',
+    with subtags defined with the main tag followed by a '/' then the subtag name
+    """
     __slots__ = ('value',)
     def __str__(self) -> str:
         return self.value
@@ -82,6 +93,7 @@ class TagID:
         self.value = value
 
 class ChannelUUID:
+    """ A channel UUID, not to be confused with a channel @handle """
     __slots__ = ('value',)
     @property
     def playlists_url(self) -> str:
@@ -102,6 +114,7 @@ class ChannelUUID:
         self.value = value
 
 class VideoNumID:
+    """ Internal numeric video ID """
     __slots__ = ('value',)
     def __str__(self) -> str:
         return f"{self.value}"
@@ -113,6 +126,7 @@ class VideoNumID:
         self.value = value
 
 class PlaylistNumID:
+    """ Internal numeric playlist ID """
     __slots__ = ('value',)
     def __str__(self) -> str:
         return f"{self.value}"
@@ -124,6 +138,7 @@ class PlaylistNumID:
         self.value = value
 
 class ChannelNumID:
+    """ Internal numeric channel ID """
     __slots__ = ('value',)
     def __str__(self) -> str:
         return f"{self.value}"
@@ -135,6 +150,7 @@ class ChannelNumID:
         self.value = value
 
 class TagNumID:
+    """ Internal numeric tag ID """
     __slots__ = ('value',)
     def __str__(self) -> str:
         return f"{self.value}"
@@ -146,6 +162,10 @@ class TagNumID:
         self.value = value
 
 def convert_file_size(size: int) -> str:
+    """
+    Convert a file size in bytes to a human readable representation
+    Using binary (1024) prefixes
+    """
     size=int(size)
     if size < 2**10:
         return f"{size           } B"
@@ -159,6 +179,7 @@ def convert_file_size(size: int) -> str:
 
 @dataclass(slots=True)
 class VideoMetadata:
+    """ Stores the entire metadata of a video """
     def to_string(self) -> str:
         def convert_duration(dur: int) -> str:
             return f"{int(dur/3600)}:{int(dur/60)%60:02d}:{dur%60:02d}"
@@ -182,6 +203,7 @@ class VideoMetadata:
 PlaylistEntriesT=typing.TypeVar('PlaylistEntriesT')
 @dataclass(slots=True)
 class PlaylistMetadata(typing.Generic[PlaylistEntriesT]):
+    """ Stores the entire metadata of a playlist, playlist entries may be stored """
     @property
     def entry_count(self) -> int:
         match self.entries:
@@ -208,6 +230,7 @@ class PlaylistMetadata(typing.Generic[PlaylistEntriesT]):
 
 @dataclass(slots=True)
 class ChannelMetadata:
+    """ Stores the entire metadata of a channel """
     id: ChannelUUID
     handle: ChannelHandle
     title: str
@@ -216,6 +239,7 @@ class ChannelMetadata:
 
 @dataclass(slots=True)
 class TagMetadata:
+    """ Stores the entire metadata of a tag """
     num_id: TagNumID
     id: TagID
     long_name: str

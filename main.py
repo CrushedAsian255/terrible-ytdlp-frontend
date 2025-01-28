@@ -1,3 +1,5 @@
+""" Main module: user interaction and command parsing """
+# pylint: disable=too-many-branches,too-many-statements
 import os
 import shutil
 import subprocess
@@ -10,9 +12,10 @@ from library import Library
 from datatypes import VideoID, PlaylistID
 from datatypes import ChannelHandle, ChannelUUID, TagID
 from datatypes import VideoMetadata, PlaylistMetadata
-from media_filesystem import *
+from media_filesystem import MediaFilesystem, LocalFilesystem, AWSFilesystem
 
 def get_item_fzf(items: list[str]) -> str | None:
+    """ Use the 'fzf' utility to let the user pick an item from a list """
     with subprocess.Popen(
         ['fzf'],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
@@ -30,6 +33,7 @@ def get_item_fzf(items: list[str]) -> str | None:
     return None
 
 def open_mpv(in_str: str | None) -> None:
+    """ Play item using mpv """
     if in_str is None:
         return
     with subprocess.Popen(
@@ -47,12 +51,14 @@ def open_mpv(in_str: str | None) -> None:
             return
 
 def pick_video_fzf(videos: list[VideoMetadata]) -> VideoID | None:
+    """ Use the 'fzf' utility to let the user pick a video from a list """
     x = get_item_fzf([video.to_string() for video in videos])
     if x is None:
         return None
     return VideoID(x)
 
 def pick_playlist_fzf(playlists: list[PlaylistMetadata[Any]]) -> PlaylistID | None:
+    """ Use the 'fzf' utility to let the user pick a playlist from a list """
     x = get_item_fzf([playlist.to_string()for playlist in playlists])
     if x is None:
         return None
@@ -62,6 +68,7 @@ def pick_content_fzf(
     videos: list[VideoMetadata],
     playlists: list[PlaylistMetadata[Any]]
 ) -> VideoID | PlaylistID | None:
+    """ Use the 'fzf' utility to let the user pick either a video or a playlist from a list """
     x = get_item_fzf(
         [video.to_string() for video in videos]+
         [playlist.to_string()for playlist in playlists]
@@ -79,6 +86,7 @@ def pick_content_fzf(
     raise ValueError(x)
 
 def parse_custom_media_fs(media_handle: str, library_path: str) -> MediaFilesystem:
+    """ Create a MediaFilesystem object from a media handle """
     split_handle = media_handle.split(":")
     match split_handle[0]:
         case "s3":
@@ -97,10 +105,12 @@ def parse_command(
     auxiliary: bool,
     tag: TagID | None
 ) -> None:
+    """ Parse a command given by the user """
     def infer_type(url: str) -> Union[VideoID,PlaylistID,ChannelUUID,ChannelHandle]:
         re_match = re.match(
             r"(?:https?:\/\/)?(?:www.)?(?:youtube(?:education)?.com(?:\.[a-z]+)?\/"
-            r"(?:watch\?v=|shorts\/|playlist\?list=|(?=@))|youtu.be\/)(@?[0-9a-zA-Z-_]+)(?:\/(videos|shorts))?",
+            r"(?:watch\?v=|shorts\/|playlist\?list=|(?=@))|youtu.be\/)"
+            r"(@?[0-9a-zA-Z-_]+)(?:\/(videos|shorts))?",
             url
         )
         value = re_match.groups()[0] if re_match else url
@@ -222,6 +232,7 @@ def parse_command(
             lib.update_thumbnails()
 
 def try_copy(src: str, dst: str) -> bool:
+    """ Attempt to copy a file and return whether it was successful """
     try:
         shutil.copy(src, dst)
     except FileNotFoundError:
@@ -229,6 +240,7 @@ def try_copy(src: str, dst: str) -> bool:
     return True
 
 def main() -> None:
+    """ Main function """
     arg_parser = ArgumentParser(prog="ytd", description="YouTube downloader and database")
 
     arg_parser.add_argument(
@@ -272,7 +284,7 @@ def main() -> None:
     library_path = f"{bpath}/{args.library}"
     db_path = f"{library_path}.db"
     try_copy(f"{db_path}.bak", f"{db_path}.bak2")
-    
+
     custom_media_handle: str | None = None
     try:
         with open(f"{library_path}.ext","r", encoding="utf-8") as f:
