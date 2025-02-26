@@ -367,7 +367,7 @@ class AWSFilesystem(MediaFilesystem):
                     self.downloaded = 0
                     self.s3.meta.client.download_file(
                         self.bucket_name,
-                        self._aws_filename(vid), f"{self._filename(vid)}..dl_tmp_2",
+                        self._aws_filename(vid), f"{self._filename(vid)}.dl_tmp_2",
                         Callback=self._download_callback,
                         Config=boto3.s3.transfer.TransferConfig(
                             multipart_threshold=2**30,
