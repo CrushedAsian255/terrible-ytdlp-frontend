@@ -4,9 +4,9 @@ import time
 import shutil
 from enum import Enum
 
-import boto3
-from botocore.config import Config
-from botocore.exceptions import ClientError
+import boto3 # type: ignore
+from botocore.config import Config # type: ignore
+from botocore.exceptions import ClientError # type: ignore
 
 from datatypes import VideoID, convert_file_size
 
@@ -22,7 +22,7 @@ class MediaFilesystem:
     """ Abstract media backend class """
     def __init__(self):
         raise NotImplementedError()
-    def write_video(self, vid: VideoID, src_path: str) -> bool:
+    def write_video(self, vid: VideoID, src_path: str) -> None:
         """ Write a video file to the filesystem """
         raise NotImplementedError()
     def get_video_url(self, vid: VideoID, force_download: bool) -> str:
@@ -34,7 +34,7 @@ class MediaFilesystem:
     def video_cached(self, vid: VideoID) -> bool:
         """ Check if a video is currently cached locally """
         raise NotImplementedError()
-    def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
+    def write_thumbnail(self, vid: VideoID, src_path: str) -> None:
         """ Write a thumbnail file to the filesystem """
         raise NotImplementedError()
     def get_thumbnail_url(self, vid: VideoID) -> str:
@@ -69,7 +69,7 @@ class LocalFilesystem(MediaFilesystem):
     def __init__(self, path: str):
         self.path = path
         os.makedirs(path,exist_ok=True)
-    def write_video(self, vid: VideoID, src_path: str) -> bool:
+    def write_video(self, vid: VideoID, src_path: str) -> None:
         os.makedirs(self._foldername(vid),exist_ok=True)
         src_size = os.stat(src_path).st_size
         dest_path = self._filename(vid)
@@ -91,17 +91,15 @@ class LocalFilesystem(MediaFilesystem):
             raise ValueError("\nError: file sizes don't match")
         print(f"\nCopied {convert_file_size(src_size)}")
         os.rename(f"{dest_path}.tmp", dest_path)
-        return True
     def get_video_url(self, vid: VideoID, force_download: bool) -> str:
         return self._filename(vid)
     def video_status(self, vid: VideoID) -> StorageClass:
         return StorageClass.LOCAL if os.path.isfile(self._filename(vid)) else StorageClass.OFFLINE
     def video_cached(self, vid: VideoID) -> bool:
-        return None
-    def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
+        return True
+    def write_thumbnail(self, vid: VideoID, src_path: str) -> None:
         os.makedirs(self._thumbnail_foldername(vid), exist_ok=True)
         shutil.copyfile(src_path,self._thumbnail_filename(vid))
-        return True
     def get_thumbnail_url(self, vid: VideoID) -> str:
         return self._thumbnail_filename(vid)
     def thumbnail_status(self, vid: VideoID) -> StorageClass:
@@ -154,9 +152,9 @@ class AWSFilesystem(MediaFilesystem):
         return f"{self.prefix}{vid.value}.mkv"
     def _aws_thumbnail_filename(self, vid: VideoID) -> str:
         return f"{self.prefix}{vid.value}.jpg"
-    def _local_video_exists(self, vid: VideoID) -> StorageClass:
+    def _local_video_exists(self, vid: VideoID) -> bool:
         return os.path.isfile(self._filename(vid))
-    def _aws_video_exists(self, vid: VideoID) -> StorageClass:
+    def _aws_video_exists(self, vid: VideoID) -> bool:
         try:
             _obj = self.s3.meta.client.head_object(
                 Bucket=self.bucket_name,
@@ -167,9 +165,9 @@ class AWSFilesystem(MediaFilesystem):
             if exc.response['Error']['Code'] == '404':
                 return False
             raise ValueError() from exc
-    def _local_thumbnail_exists(self, vid: VideoID) -> StorageClass:
+    def _local_thumbnail_exists(self, vid: VideoID) -> bool:
         return os.path.isfile(self._thumbnail_filename(vid))
-    def _aws_thumbnail_exists(self, vid: VideoID) -> StorageClass:
+    def _aws_thumbnail_exists(self, vid: VideoID) -> bool:
         try:
             _obj = self.s3.meta.client.head_object(
                 Bucket=self.bucket_name,
@@ -218,7 +216,7 @@ class AWSFilesystem(MediaFilesystem):
             (VideoID(x['Key'][-15:-4]),x['Size'])
             for x in content_list if x['Key'][-4:] == '.jpg'
         ]
-        output = {}
+        output: dict[VideoID,list[int | None]] = {}
         for vid,size in videos:
             if vid not in output:
                 output[vid] = [None,None]
@@ -258,7 +256,7 @@ class AWSFilesystem(MediaFilesystem):
             f"{convert_file_size(self.total)}, "
             f"{self.downloaded*100/self.total:.01f}%",end="\r"
         )
-    def write_video(self, vid: VideoID, src_path: str) -> bool:
+    def write_video(self, vid: VideoID, src_path: str) -> None:
         self.total = os.stat(src_path).st_size
         self.uploaded = 0
         print("Uploading file",end="\r")
@@ -304,7 +302,7 @@ class AWSFilesystem(MediaFilesystem):
         return StorageClass.OFFLINE
     def video_cached(self, vid: VideoID) -> bool:
         return self._local_video_exists(vid)
-    def write_thumbnail(self, vid: VideoID, src_path: str) -> bool:
+    def write_thumbnail(self, vid: VideoID, src_path: str) -> None:
         print("Uploading thumbnail")
         self.s3.Bucket(self.bucket_name).upload_file(src_path, self._aws_thumbnail_filename(vid))
         print("Uploaded!")
@@ -363,7 +361,7 @@ class AWSFilesystem(MediaFilesystem):
                 if not self.video_cached(vid):
                     print(f"Caching video: {vid}")
                     os.makedirs(self._foldername(vid),exist_ok=True)
-                    self.total = aws_videos[vid][0]
+                    self.total = aws_videos[vid][0] or 0
                     self.downloaded = 0
                     self.s3.meta.client.download_file(
                         self.bucket_name,

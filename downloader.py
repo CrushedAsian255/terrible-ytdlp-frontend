@@ -5,7 +5,6 @@ from typing import Any, cast
 
 import yt_dlp # type: ignore
 
-from media_filesystem import MediaFilesystem, StorageClass
 from datatypes import VideoID
 
 CONCURRENT_THREADS = 8
@@ -25,8 +24,9 @@ class NoLog:
 InfoDict = dict[str,Any]
 
 def ytdlp_download_video(
-        media_fs: MediaFilesystem, vid: VideoID, max_res: int | None,
-        logged_in_path: str | None) -> InfoDict | None:
+        vid: VideoID, max_res: int | None,
+        logged_in_path: str | None, should_download: bool,
+        format_selector: str) -> tuple[InfoDict | None,str | None]:
     """ Download a video from YouTube and return its metadata """
     parameters = {
         # "logger": NoLog,
@@ -39,7 +39,7 @@ def ytdlp_download_video(
         "ignoreerrors": True,
         "match_filter": lambda x: 'Skipped: Live video' if x['is_live'] else None,
         "writesubtitles": True,
-        "format":"bestaudio+bestvideo",
+        "format":format_selector,
         "subtitleslangs": ['all', '-live_chat'],
         "postprocessors":[
             {"key": "FFmpegEmbedSubtitle"},
@@ -76,21 +76,18 @@ def ytdlp_download_video(
             print("Invalid PO Token")
 
     dl = yt_dlp.YoutubeDL(parameters)
-    should_download = media_fs.video_status(vid) == StorageClass.OFFLINE
 
     info: InfoDict | None = dl.extract_info(str(vid),download=should_download)
     if info is None or info["is_live"] is True:
-        return None
+        return (None,None)
 
     if not should_download:
-        return info
+        return (info, None)
 
     src_file = f"/tmp/video_dl_{vid}.mkv"
     if not os.path.isfile(src_file):
         raise IOError("Error downloading video")
-    media_fs.write_video(vid,src_file)
-    os.remove(src_file)
-    return info
+    return (info, src_file)
 
 def ytdlp_download_playlist_metadata(purl: str , channel_mode: bool = False) -> InfoDict | None:
     """ Download information about a playlist """

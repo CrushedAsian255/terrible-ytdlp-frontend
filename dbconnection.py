@@ -99,6 +99,9 @@ class Database:
             channel_id INTEGER NOT NULL,
             removed INTEGER NOT NULL DEFAULT 0,
             aux_data TEXT,
+            video_checksum TEXT,
+	        thumbnail_checksum TEXT,
+            info_json TEXT,
             FOREIGN KEY (channel_id) REFERENCES Channel(num_id)      
         ) STRICT''')
         self._exec("CREATE INDEX IF NOT EXISTS idx_video_id ON Video(id)")
@@ -201,20 +204,21 @@ class Database:
             channel_id=ChannelUUID(data[0][7]),
             channel_name=data[0][8]
         )
-    def write_video_info(self, video: VideoMetadata, add_tag: bool) -> VideoNumID:
+    def write_video_info(self, video: VideoMetadata, add_tag: bool, info_json: str) -> VideoNumID:
         """ Write video metadata to the database """
         db_out = self._exec('''
-        INSERT INTO Video(id,title,description,upload_timestamp,duration,epoch,channel_id)
+        INSERT INTO Video(id,title,description,upload_timestamp,duration,epoch,channel_id,info_json)
         VALUES (
             ?,?,?,?,?,?,
-            (SELECT num_id FROM Channel WHERE id=?))
+            (SELECT num_id FROM Channel WHERE id=?),?)
         ON CONFLICT DO UPDATE SET  
             title=excluded.title,
             description=excluded.description,
             upload_timestamp=excluded.upload_timestamp,
             duration=excluded.duration,
             epoch=excluded.epoch,
-            channel_id=excluded.channel_id
+            channel_id=excluded.channel_id,
+            info_json=excluded.info_json
         RETURNING (num_id)
         ''',(video.id,
             video.title,
@@ -222,7 +226,8 @@ class Database:
             int(video.upload_timestamp),
             int(video.duration),
             int(video.epoch),
-            video.channel_id
+            video.channel_id,
+            info_json
         ))
         if add_tag:
             self._exec(
@@ -231,6 +236,32 @@ class Database:
             )
         self.connection.commit()
         return cast(VideoNumID,db_out[0][0])
+
+    def set_checksums(self,
+                      vid: VideoID, thumbnail_checksum: str | None,
+                      video_checksum: str | None):
+        """ Set either video or thumbnail checksums for a video """
+        if thumbnail_checksum:
+            self._exec(
+                "UPDATE Video SET thumbnail_checksum=? WHERE id=?",
+                (thumbnail_checksum, vid)
+            )
+        if video_checksum:
+            self._exec(
+                "UPDATE Video SET video_checksum=? WHERE id=?",
+                (video_checksum, vid)
+            )
+        self.connection.commit()
+
+    def get_checksums(self, vid: VideoID) -> tuple[str|None,str|None]:
+        """ Get video and thumbnail checksums for a video """
+        data = self._exec(
+            "SELECT thumbnail_checksum, video_checksum Video FROM Video WHERE id=?",
+            (vid,)
+        )
+        if len(data) == 0:
+            return (None,None)
+        return data[0]
 
     def get_playlist_info(self, pid: PlaylistID) -> PlaylistMetadata[list[VideoMetadata]] | None:
         """ Get metadata about a playlist from its ID """

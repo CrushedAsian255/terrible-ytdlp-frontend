@@ -2,7 +2,10 @@
 import urllib.request
 import urllib.error
 import os
+from typing import Any
 from argparse import Namespace
+import hashlib
+import json
 
 from downloader import ytdlp_download_video, ytdlp_download_playlist_metadata
 from dbconnection import Database
@@ -17,11 +20,11 @@ class Library:
         self.expect_many_failures = args.expect_many_failures
         self.media_fs = media_fs
         self.db = Database(f"{library_path}.db",args.print_db_log)
-        self.max_video_resolution = args.max_resolution
+        self.args = args
         try:
             os.path.isfile(f"{library_path}.cjar")
             os.path.isfile(f"{library_path}.pot")
-            self.login_data_path = library_path
+            self.login_data_path: str | None = library_path
         except (FileNotFoundError, IsADirectoryError):
             self.login_data_path = None
 
@@ -33,15 +36,16 @@ class Library:
         """ Write an entry to the in-database audit log """
         self.db.write_log(category,contents)
 
-    def download_thumbnail(self, video: VideoID) -> None:
+    def download_thumbnail(self, video: VideoID, force=False) -> str | None:
         """ Download a video's thumbnail"""
         # IDEA: maybe move to downloader.py ?
         fileloc = f"/tmp/thumb.{video}.jpg"
-        match self.media_fs.thumbnail_status(video):
-            case StorageClass.LOCAL | StorageClass.REMOTE:
-                return
-            case StorageClass.OFFLINE:
-                pass
+        if not force:
+            match self.media_fs.thumbnail_status(video):
+                case StorageClass.LOCAL | StorageClass.REMOTE:
+                    return None
+                case StorageClass.OFFLINE:
+                    pass
         download_paths: list[tuple[str,str|None]] = [
             (f"https://i.ytimg.com/vi/{video}/maxresdefault.jpg",None),
             (f"https://i.ytimg.com/vi/{video}/hq720.jpg",None),
@@ -54,14 +58,19 @@ class Library:
         for url, thumb_type in download_paths:
             try:
                 urllib.request.urlretrieve(url, fileloc)
+                sha512 = hashlib.sha512()
+                with open(fileloc, 'rb') as f:
+                    while chunk := f.read(16384):
+                        sha512.update(chunk)
                 self.media_fs.write_thumbnail(video,fileloc)
                 os.remove(fileloc)
                 if thumb_type:
                     print(f"[INFO] {video} only had {thumb_type} thumbnail")
-                return
+                return sha512.hexdigest()
             except urllib.error.HTTPError:
                 pass
         print(f"[WARN] {video} has no thumbnails!")
+        return None
 
     def update_thumbnails(self) -> None:
         """ Verify all thumbnails are downloaded """
@@ -194,28 +203,61 @@ class Library:
             )
         )
 
+    @staticmethod
+    def serialize_info_json(video_metadata: dict[str,Any]) -> str:
+        " Remove long strings from the info_json and stringify it "
+        info_json = video_metadata.copy()
+        if 'subtitles' in info_json:
+            del info_json['subtitles']
+        if 'automatic_captions' in info_json:
+            del info_json['automatic_captions']
+        if 'thumbnails' in info_json:
+            del info_json['thumbnails']
+        if 'formats' in info_json:
+            del info_json['formats']
+        if 'requested_downloads' in info_json:
+            del info_json['requested_downloads']
+        if 'requested_formats' in info_json:
+            for x in info_json['requested_formats']:
+                if 'fragments' in x:
+                    del x["fragments"]
+        return json.dumps(info_json)
+
     def download_video(self, vid: VideoID, add_tag: bool = True) -> None:
         """ Download a video """
         db_entry = self.db.get_video_info(vid)
-        if db_entry is None:
-            if self.expect_many_failures:
-                try:
-                    urllib.request.urlretrieve(
-                        f"https://i.ytimg.com/vi/{vid}/default.jpg",
-                        f"/tmp/_thumb_tmp_{vid}.jpg"
-                    )
-                    os.remove(f"/tmp/_thumb_tmp_{vid}.jpg")
-                except urllib.error.HTTPError:
-                    print(f"Video {vid} has no basic thumbnail, assuming video non-existant")
-                    return
-            self.download_thumbnail(vid)
-            video_metadata = ytdlp_download_video(self.media_fs, vid,
-                                                  self.max_video_resolution, None)
+        chk_thm, chk_vid = self.db.get_checksums(vid)
+        if db_entry is None or chk_thm is None or chk_vid is None:
+            if chk_thm:
+                thumbnail_checksum: str | None = chk_thm
+            else:
+                if self.expect_many_failures:
+                    try:
+                        urllib.request.urlretrieve(
+                            f"https://i.ytimg.com/vi/{vid}/default.jpg",
+                            f"/tmp/_thumb_tmp_{vid}.jpg"
+                        )
+                        os.remove(f"/tmp/_thumb_tmp_{vid}.jpg")
+                    except urllib.error.HTTPError:
+                        print(f"Video {vid} has no basic thumbnail, assuming video non-existant")
+                        return
+                thumbnail_checksum = self.download_thumbnail(vid,True)
+                print(thumbnail_checksum)
+            should_download = (
+                self.media_fs.video_status(vid) == StorageClass.OFFLINE
+                or chk_vid is None
+            )
+
+            video_metadata, video_download_path = ytdlp_download_video(
+                vid, self.args.max_resolution, None,
+                should_download, self.args.format_override
+            )
             if video_metadata is None and self.login_data_path:
                 print("Attempting logged in")
-                video_metadata = ytdlp_download_video(
-                    self.media_fs, vid, self.max_video_resolution, self.login_data_path)
-
+                video_metadata, video_download_path = ytdlp_download_video(
+                    vid, self.args.max_resolution, self.login_data_path,
+                    should_download, self.args.format_override
+                )
             if video_metadata is not None:
                 self.save_channel_info(ChannelUUID(video_metadata['channel_id']))
                 self.db.write_video_info(VideoMetadata(
@@ -228,7 +270,16 @@ class Library:
                     upload_timestamp=video_metadata['timestamp'],
                     duration=video_metadata['duration'],
                     epoch=video_metadata['epoch'],
-                ), add_tag)
+                ), add_tag, Library.serialize_info_json(video_metadata))
+            if video_download_path:
+                sha512 = hashlib.sha512()
+                with open(video_download_path, 'rb') as f:
+                    while chunk := f.read(65536):
+                        sha512.update(chunk)
+                video_checksum = sha512.hexdigest()
+                self.media_fs.write_video(vid,video_download_path)
+                os.remove(video_download_path)
+                self.db.set_checksums(vid, thumbnail_checksum, video_checksum)
         else:
             self.save_channel_info(db_entry.channel_id)
 
@@ -250,13 +301,14 @@ class Library:
                 epoch=data['epoch']
             ))
 
-    def _get_cached_content(self) -> list[VideoID]:
+    def _get_cached_content(self) -> set[VideoID]:
         cached_videos = set()
         for video in self.db.get_videos([TagNumID(0)]):
             cached_videos.add(video.id)
         for playlist in self.db.get_playlists([TagNumID(0)]):
-            for video in self.db.get_playlist_info(playlist.id).entries:
-                cached_videos.add(video.id)
+            if playlist_info := self.db.get_playlist_info(playlist.id):
+                for video in playlist_info.entries:
+                    cached_videos.add(video.id)
         return cached_videos
 
     def integrity_check(self) -> None:

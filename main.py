@@ -264,6 +264,10 @@ def main() -> None:
         dest="library", default='master'
     )
     arg_parser.add_argument(
+        "-f", help="Format force",
+        dest="format_override", default="bestaudio+bestvideo"
+    )
+    arg_parser.add_argument(
         "-a", help="Perform auxiliary action (command specific)",
         dest="auxiliary", action='store_true'
     )
@@ -295,7 +299,7 @@ def main() -> None:
     if args.media_handle:
         custom_media_handle = args.media_handle
         with open(f"{library_path}.ext","w", encoding="utf-8") as f:
-            f.write(custom_media_handle)
+            f.write(custom_media_handle or "")
 
     if custom_media_handle:
         media_fs = parse_custom_media_fs(custom_media_handle,library_path)
