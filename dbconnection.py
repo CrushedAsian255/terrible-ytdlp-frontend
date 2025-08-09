@@ -38,7 +38,7 @@ class Database:
         start = time.perf_counter_ns()
         out = self.connection.execute(command, params).fetchall()
         end = time.perf_counter_ns()
-        if end - start > 10_000_000:
+        if end - start > 25_000_000:
             print(f"[WARNING] Command {int((end-start)/1_000_000)} ms [{cmdref}]",file=sys.stderr)
         if self.print_db_log:
             print(

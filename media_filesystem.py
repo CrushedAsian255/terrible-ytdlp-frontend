@@ -233,7 +233,11 @@ class AWSFilesystem(MediaFilesystem):
             endpoint_url=os.getenv("AWS_ENDPOINT_URL"),
             aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-            config = Config(signature_version='s3v4')
+            config = Config(
+                signature_version='s3v4',
+                response_checksum_validation="when_required",
+                request_checksum_calculation="when_required"
+            )
         )
         self.path = local_path
         os.makedirs(self.path,exist_ok=True)
